@@ -1,6 +1,4 @@
-# DoraMate 用户画像1: 小梦 (技术学习者)
-
-<img src="https://image.lexica.art/full_jpg/f1452445-5d66-4e55-9005-09695d7f1d44" width="150" alt="Li Xiaoming">
+# DoraMate 用户画像1: 小梦 (技术学习者）
 
 *   **一句话简介**: “B站上那个自动弹琴的机器人太酷了！我也想做一个，但…该从哪儿开始呢？”
 *   **角色标签**: `#学生` `#初学者` `#AI爱好者` `#DORA潜力用户`
