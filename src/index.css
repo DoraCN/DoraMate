@@ -1,0 +1,236 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* DoraMate Design System - Dark Theme Node Editor */
+
+@layer base {
+  :root {
+    /* Dark professional theme */
+    --background: 220 20% 10%;
+    --foreground: 210 20% 95%;
+
+    --card: 220 18% 14%;
+    --card-foreground: 210 20% 95%;
+
+    --popover: 220 18% 12%;
+    --popover-foreground: 210 20% 95%;
+
+    --primary: 210 90% 55%;
+    --primary-foreground: 210 20% 98%;
+
+    --secondary: 220 15% 20%;
+    --secondary-foreground: 210 20% 90%;
+
+    --muted: 220 15% 18%;
+    --muted-foreground: 215 15% 55%;
+
+    --accent: 270 70% 55%;
+    --accent-foreground: 210 20% 98%;
+
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 210 20% 98%;
+
+    --border: 220 15% 22%;
+    --input: 220 15% 18%;
+    --ring: 210 90% 55%;
+
+    --radius: 0.75rem;
+
+    /* Node colors */
+    --node-input: 210 90% 55%;
+    --node-input-bg: 210 90% 55% / 0.15;
+    --node-process: 150 70% 45%;
+    --node-process-bg: 150 70% 45% / 0.15;
+    --node-output: 270 70% 55%;
+    --node-output-bg: 270 70% 55% / 0.15;
+    --node-error: 0 80% 55%;
+    --node-error-bg: 0 80% 55% / 0.15;
+
+    /* Canvas */
+    --canvas-bg: 220 22% 8%;
+    --canvas-grid: 220 15% 15%;
+    --canvas-grid-major: 220 15% 18%;
+
+    /* Connection lines */
+    --connection-default: 210 20% 50%;
+    --connection-active: 210 90% 55%;
+    --connection-invalid: 0 80% 55%;
+
+    /* Shadows */
+    --shadow-node: 0 8px 32px -8px hsl(0 0% 0% / 0.5);
+    --shadow-node-hover: 0 12px 40px -8px hsl(var(--primary) / 0.3);
+    --shadow-panel: 0 4px 24px -4px hsl(0 0% 0% / 0.4);
+
+    /* Sidebar */
+    --sidebar-background: 220 18% 12%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 210 90% 55%;
+    --sidebar-primary-foreground: 210 20% 98%;
+    --sidebar-accent: 220 15% 18%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 220 15% 20%;
+    --sidebar-ring: 210 90% 55%;
+  }
+
+  .dark {
+    /* Same as root - already dark */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer components {
+  /* Node styles */
+  .node-card {
+    @apply relative rounded-xl border transition-all duration-200 ease-out;
+    @apply hover:scale-[1.02] cursor-grab active:cursor-grabbing;
+    box-shadow: var(--shadow-node);
+  }
+
+  .node-card:hover {
+    box-shadow: var(--shadow-node-hover);
+  }
+
+  .node-input {
+    @apply border-[hsl(var(--node-input))];
+    background: linear-gradient(
+      135deg,
+      hsl(var(--node-input-bg)),
+      hsl(var(--card))
+    );
+  }
+
+  .node-process {
+    @apply border-[hsl(var(--node-process))];
+    background: linear-gradient(
+      135deg,
+      hsl(var(--node-process-bg)),
+      hsl(var(--card))
+    );
+  }
+
+  .node-output {
+    @apply border-[hsl(var(--node-output))];
+    background: linear-gradient(
+      135deg,
+      hsl(var(--node-output-bg)),
+      hsl(var(--card))
+    );
+  }
+
+  .node-error {
+    @apply border-[hsl(var(--node-error))];
+    background: linear-gradient(
+      135deg,
+      hsl(var(--node-error-bg)),
+      hsl(var(--card))
+    );
+  }
+
+  /* Port styles */
+  .node-port {
+    @apply w-3 h-3 rounded-full border-2 transition-all duration-150;
+    @apply hover:scale-125 hover:shadow-lg;
+  }
+
+  .port-input {
+    @apply bg-background border-[hsl(var(--node-input))];
+  }
+
+  .port-output {
+    @apply bg-background border-[hsl(var(--node-output))];
+  }
+
+  /* Canvas grid pattern */
+  .canvas-grid {
+    background-color: hsl(var(--canvas-bg));
+    background-image: 
+      linear-gradient(hsl(var(--canvas-grid)) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--canvas-grid)) 1px, transparent 1px),
+      linear-gradient(hsl(var(--canvas-grid-major)) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--canvas-grid-major)) 1px, transparent 1px);
+    background-size: 20px 20px, 20px 20px, 100px 100px, 100px 100px;
+  }
+
+  /* Panel styles */
+  .panel {
+    @apply bg-card border-border;
+    box-shadow: var(--shadow-panel);
+  }
+
+  /* Toolbar button */
+  .toolbar-btn {
+    @apply px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150;
+    @apply bg-secondary text-secondary-foreground;
+    @apply hover:bg-primary hover:text-primary-foreground;
+    @apply active:scale-95;
+  }
+
+  .toolbar-btn-primary {
+    @apply bg-primary text-primary-foreground;
+    @apply hover:bg-primary/90;
+  }
+
+  /* Node palette item */
+  .palette-item {
+    @apply flex items-center gap-3 p-3 rounded-lg cursor-grab;
+    @apply bg-secondary/50 border border-transparent;
+    @apply hover:border-primary/50 hover:bg-secondary;
+    @apply transition-all duration-150 active:scale-95;
+  }
+
+  /* Connection line animation */
+  @keyframes flow {
+    from { stroke-dashoffset: 20; }
+    to { stroke-dashoffset: 0; }
+  }
+
+  .connection-flowing {
+    stroke-dasharray: 5 5;
+    animation: flow 0.5s linear infinite;
+  }
+
+  /* Glow effect for active elements */
+  .glow-primary {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.4);
+  }
+
+  .glow-success {
+    box-shadow: 0 0 20px hsl(var(--node-process) / 0.4);
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+}
