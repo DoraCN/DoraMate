@@ -553,7 +553,7 @@ fn EnvVariables(
                                                 class="env-key"
                                                 placeholder="变量名"
                                                 value=key_for_value
-                                                on:input=move |e| {
+                                                on:change=move |e| {
                                                     update_env_key(key3.clone(), event_target_value(&e));
                                                 }
                                                 style=move || if edit_mode_clone.get() { "" } else { "display: none;" }
@@ -572,7 +572,7 @@ fn EnvVariables(
                                                 class="env-value"
                                                 placeholder="变量值"
                                                 value=value_for_value
-                                                on:input=move |e| {
+                                                on:change=move |e| {
                                                     update_env_value(key_clone.clone(), event_target_value(&e));
                                                 }
                                                 style=move || if edit_mode_clone.get() { "" } else { "display: none;" }

@@ -124,21 +124,53 @@ fn collect_selected_subflow(
     })
 }
 
-fn make_unique_node_id(base: &str, used: &mut HashSet<String>) -> String {
-    if !used.contains(base) {
-        let id = base.to_string();
-        used.insert(id.clone());
-        return id;
+fn split_numeric_suffix(id: &str) -> (&str, Option<usize>) {
+    let Some((prefix, suffix)) = id.rsplit_once('_') else {
+        return (id, None);
+    };
+    if prefix.is_empty() {
+        return (id, None);
+    }
+    match suffix.parse::<usize>() {
+        Ok(value) => (prefix, Some(value)),
+        Err(_) => (id, None),
+    }
+}
+
+fn split_label_number_suffix(label: &str) -> (&str, Option<usize>) {
+    let Some((prefix, suffix)) = label.rsplit_once(" #") else {
+        return (label, None);
+    };
+    if prefix.trim().is_empty() {
+        return (label, None);
+    }
+    match suffix.parse::<usize>() {
+        Ok(value) => (prefix, Some(value)),
+        Err(_) => (label, None),
+    }
+}
+
+fn make_unique_pasted_node_id(source_id: &str, used: &mut HashSet<String>) -> String {
+    let (series_prefix, source_suffix) = split_numeric_suffix(source_id);
+    let numeric_prefix = format!("{}_", series_prefix);
+    let mut max_suffix = source_suffix.unwrap_or(0usize);
+
+    for existing_id in used.iter() {
+        if let Some(rest) = existing_id.strip_prefix(&numeric_prefix) {
+            if let Ok(value) = rest.parse::<usize>() {
+                max_suffix = max_suffix.max(value);
+            }
+        }
     }
 
-    let mut idx = 1usize;
+    let mut next_suffix = max_suffix.saturating_add(1);
     loop {
-        let candidate = format!("{}_{}", base, idx);
+        let candidate = format!("{}_{}", series_prefix, next_suffix);
         if !used.contains(&candidate) {
             used.insert(candidate.clone());
             return candidate;
         }
-        idx += 1;
+        next_suffix = next_suffix.saturating_add(1);
     }
 }
 
@@ -148,14 +180,25 @@ fn build_pasted_dataflow(clipboard: &Dataflow, existing_nodes: &[Node], offset: 
 
     let mut pasted_nodes = Vec::with_capacity(clipboard.nodes.len());
     for node in &clipboard.nodes {
-        let new_id = make_unique_node_id(&format!("{}_copy", node.id), &mut used_ids);
+        let new_id = make_unique_pasted_node_id(&node.id, &mut used_ids);
         id_map.insert(node.id.clone(), new_id.clone());
+
+        let (_, label_index) = split_numeric_suffix(&new_id);
+        let (raw_label_base, _) = split_label_number_suffix(node.label.trim());
+        let label_base = if raw_label_base.trim().is_empty() {
+            node.node_type.as_str()
+        } else {
+            raw_label_base.trim()
+        };
 
         let mut cloned = node.clone();
         cloned.id = new_id;
         cloned.x += offset;
         cloned.y += offset;
-        cloned.label = format!("{} (copy)", cloned.label);
+        cloned.label = match label_index {
+            Some(value) => format!("{} #{}", label_base, value),
+            None => label_base.to_string(),
+        };
         pasted_nodes.push(cloned);
     }
 
@@ -1546,8 +1589,8 @@ mod open_flow_state_tests {
             }],
         };
         let existing_nodes = vec![
-            sample_node("node_a_copy", 0.0, 0.0),
-            sample_node("node_b_copy", 0.0, 0.0),
+            sample_node("node_a_1", 0.0, 0.0),
+            sample_node("node_b_1", 0.0, 0.0),
         ];
 
         let pasted = build_pasted_dataflow(&clipboard, &existing_nodes, 32.0);
@@ -1559,13 +1602,13 @@ mod open_flow_state_tests {
         assert_eq!(pasted_ids.len(), 2);
         assert!(!pasted_ids.contains("node_a"));
         assert!(!pasted_ids.contains("node_b"));
-        assert!(!pasted_ids.contains("node_a_copy"));
-        assert!(!pasted_ids.contains("node_b_copy"));
+        assert!(pasted_ids.contains("node_a_2"));
+        assert!(pasted_ids.contains("node_b_2"));
 
         let pasted_a = pasted
             .nodes
             .iter()
-            .find(|n| n.label == "node_a (copy)")
+            .find(|n| n.label == "node_a #2")
             .expect("copied node_a");
         assert_eq!(pasted_a.x, 42.0);
         assert_eq!(pasted_a.y, 52.0);
@@ -1623,7 +1666,27 @@ mod open_flow_state_tests {
         assert_eq!(duplicated.len(), 2);
         assert_eq!(nodes.len(), 4);
         assert_eq!(connections.len(), 2);
-        assert!(duplicated.iter().all(|id| id.contains("_copy")));
+        assert!(duplicated.iter().all(|id| id.rsplit_once('_').is_some()));
+        assert!(duplicated.iter().all(|id| {
+            id.rsplit_once('_')
+                .map(|(_, suffix)| suffix.parse::<usize>().is_ok())
+                .unwrap_or(false)
+        }));
+    }
+
+    #[test]
+    fn test_duplicate_selected_subflow_increments_numeric_suffix_series() {
+        let mut nodes = vec![
+            sample_node("python_custom_1", 10.0, 20.0),
+            sample_node("python_custom_2", 60.0, 40.0),
+        ];
+        let mut connections = Vec::new();
+        let selected = vec!["python_custom_1".to_string()];
+
+        let duplicated =
+            duplicate_selected_subflow(&mut nodes, &mut connections, &selected, DUPLICATE_OFFSET);
+
+        assert_eq!(duplicated, vec!["python_custom_3".to_string()]);
     }
 
     #[test]
@@ -3418,7 +3481,13 @@ pub fn App() -> impl IntoView {
                                             set_nodes.update(|nodes| {
                                                 if let Some(target) = nodes.iter_mut().find(|n| n.id == conn.to) {
                                                     if let Some(ref mut inputs) = target.inputs {
-                                                        inputs.retain(|input| !input.starts_with(&from_id_prefix));
+                                                        inputs.retain(|input| {
+                                                            let source = input
+                                                                .split_once(':')
+                                                                .map(|(_, source)| source.trim())
+                                                                .unwrap_or_else(|| input.trim());
+                                                            !source.starts_with(&from_id_prefix)
+                                                        });
                                                     }
                                                 }
                                             });

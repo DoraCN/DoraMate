@@ -12,6 +12,120 @@ const NODE_WIDTH: f64 = 120.0;
 const NODE_HEIGHT: f64 = 60.0;
 const SELECTION_THRESHOLD: f64 = 4.0;
 
+fn next_incremental_node_id(
+    existing_nodes: &[Node],
+    id_prefix: &str,
+    also_match_prefixes: &[&str],
+) -> (String, usize) {
+    let mut prefixes = Vec::with_capacity(1 + also_match_prefixes.len());
+    prefixes.push(format!("{}_", id_prefix));
+    for legacy in also_match_prefixes {
+        if !legacy.is_empty() && *legacy != id_prefix {
+            prefixes.push(format!("{}_", legacy));
+        }
+    }
+
+    let mut max_suffix = 0usize;
+
+    for node in existing_nodes {
+        for prefix in &prefixes {
+            if let Some(rest) = node.id.strip_prefix(prefix) {
+                if let Ok(value) = rest.parse::<usize>() {
+                    max_suffix = max_suffix.max(value);
+                    break;
+                }
+            }
+        }
+    }
+
+    let used_ids: HashSet<&str> = existing_nodes.iter().map(|node| node.id.as_str()).collect();
+    let mut next_suffix = max_suffix.saturating_add(1);
+
+    loop {
+        let candidate = format!("{}_{}", id_prefix, next_suffix);
+        if !used_ids.contains(candidate.as_str()) {
+            return (candidate, next_suffix);
+        }
+        next_suffix = next_suffix.saturating_add(1);
+    }
+}
+
+fn parse_input_port_name(input: &str) -> Option<String> {
+    let value = input.trim();
+    if value.is_empty() {
+        return None;
+    }
+
+    if let Some((port_name, _)) = value.split_once(':') {
+        let normalized = port_name.trim();
+        if !normalized.is_empty() {
+            return Some(normalized.to_string());
+        }
+    }
+
+    if let Some((_, port_name)) = value.rsplit_once('/') {
+        let normalized = port_name.trim();
+        if !normalized.is_empty() {
+            return Some(normalized.to_string());
+        }
+    }
+
+    Some(value.to_string())
+}
+
+fn input_has_bound_source(input: &str) -> bool {
+    let value = input.trim();
+    if value.is_empty() {
+        return false;
+    }
+    if let Some((_, source)) = value.split_once(':') {
+        return !source.trim().is_empty();
+    }
+    value.contains('/')
+}
+
+fn select_target_input_port(target_node: &Node, preferred_port: &str) -> (String, Option<usize>) {
+    let preferred = preferred_port.trim();
+
+    if let Some(inputs) = target_node.inputs.as_ref() {
+        if !preferred.is_empty() {
+            if let Some((idx, port_name)) = inputs
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, input)| parse_input_port_name(input).map(|name| (idx, name)))
+                .find(|(_, name)| name == preferred)
+            {
+                return (port_name, Some(idx));
+            }
+        }
+
+        if let Some((idx, port_name)) = inputs
+            .iter()
+            .enumerate()
+            .filter(|(_, input)| !input_has_bound_source(input))
+            .filter_map(|(idx, input)| parse_input_port_name(input).map(|name| (idx, name)))
+            .next()
+        {
+            return (port_name, Some(idx));
+        }
+
+        if let Some((idx, port_name)) = inputs
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, input)| parse_input_port_name(input).map(|name| (idx, name)))
+            .next()
+        {
+            return (port_name, Some(idx));
+        }
+    }
+
+    if preferred.is_empty() {
+        ("in".to_string(), None)
+    } else {
+        (preferred.to_string(), None)
+    }
+}
+
 #[derive(Clone, Debug)]
 struct ConnectionDrag {
     from_node: String,
@@ -326,19 +440,22 @@ pub fn Canvas(
                         let (drop_x, drop_y) =
                             get_svg_coords(e.offset_x() as f64, e.offset_y() as f64);
 
-                        let same_type_count = nodes
-                            .get()
-                            .iter()
-                            .filter(|n| n.node_type == template.node_type)
-                            .count();
-                        let instance_number = same_type_count + 1;
-
-                        let timestamp = js_sys::Date::now();
-                        let node_id = format!(
-                            "{}_{:03}_{:010}",
-                            template.id,
-                            instance_number,
-                            (timestamp * 1_000_000.0) as u64
+                        let current_nodes = nodes.get();
+                        let mut normalized_prefix = template.id.as_str();
+                        let mut legacy_prefixes: Vec<&str> = Vec::new();
+                        for removable_prefix in ["yaml_", "cfg_"] {
+                            if let Some(stripped) = normalized_prefix.strip_prefix(removable_prefix)
+                            {
+                                if !stripped.is_empty() {
+                                    legacy_prefixes.push(normalized_prefix);
+                                    normalized_prefix = stripped;
+                                }
+                            }
+                        }
+                        let (node_id, instance_number) = next_incremental_node_id(
+                            &current_nodes,
+                            normalized_prefix,
+                            &legacy_prefixes,
                         );
 
                         let node_label = format!("{} #{}", template.name, instance_number);
@@ -571,15 +688,15 @@ pub fn Canvas(
                                                         }
                                                     };
 
-                                                    let to_port_name = {
+                                                    let (to_port_name, to_port_index) = {
                                                         let nodes_vec = nodes.get();
                                                         if let Some(n) = nodes_vec.iter().find(|n| n.id == to) {
-                                                            n.inputs
-                                                                .as_ref()
-                                                                .and_then(|inputs| inputs.first().cloned())
-                                                                .unwrap_or_else(|| "in".to_string())
+                                                            select_target_input_port(
+                                                                n,
+                                                                &from_port_name,
+                                                            )
                                                         } else {
-                                                            "in".to_string()
+                                                            ("in".to_string(), None)
                                                         }
                                                     };
 
@@ -587,12 +704,12 @@ pub fn Canvas(
                                                         from: from.clone(),
                                                         to: to.clone(),
                                                         from_port: Some(from_port_name.clone()),
-                                                        to_port: Some(to_port_name),
+                                                        to_port: Some(to_port_name.clone()),
                                                     };
                                                     set_connections.update(|all| all.push(new_connection));
 
                                                     let new_input_value =
-                                                        format!("{}/{}", from, from_port_name);
+                                                        format!("{}: {}/{}", to_port_name, from, from_port_name);
                                                     set_nodes.update(|all_nodes| {
                                                         if let Some(target) =
                                                             all_nodes.iter_mut().find(|n| n.id == to)
@@ -603,8 +720,25 @@ pub fn Canvas(
                                                             } else if let Some(ref mut inputs) =
                                                                 target.inputs
                                                             {
-                                                                if !inputs.is_empty() {
-                                                                    inputs[0] = new_input_value.clone();
+                                                                if let Some(idx) = to_port_index {
+                                                                    if idx < inputs.len() {
+                                                                        inputs[idx] =
+                                                                            new_input_value.clone();
+                                                                    } else {
+                                                                        inputs.push(
+                                                                            new_input_value.clone(),
+                                                                        );
+                                                                    }
+                                                                } else if let Some(idx) = inputs
+                                                                    .iter()
+                                                                    .position(|input| {
+                                                                        parse_input_port_name(input)
+                                                                            .as_deref()
+                                                                            == Some(to_port_name.as_str())
+                                                                    })
+                                                                {
+                                                                    inputs[idx] =
+                                                                        new_input_value.clone();
                                                                 } else {
                                                                     inputs.push(new_input_value.clone());
                                                                 }
