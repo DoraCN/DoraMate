@@ -1,0 +1,15 @@
+2026-03-04T07:16:00.494536Z  INFO dora_daemon::coordinator: Connected to dora-coordinator at 127.0.0.1:54500
+2026-03-04T07:16:00.538654Z  INFO zenoh::net::runtime: Using ZID: 37ec8c066f4a8a11d5330c84b62ffac5
+2026-03-04T07:16:00.545104Z  INFO zenoh::net::runtime::orchestrator: Zenoh can be reached at: tcp/[2409:8a55:35b5:d161::c36]:5456
+2026-03-04T07:16:00.545142Z  INFO zenoh::net::runtime::orchestrator: Zenoh can be reached at: tcp/[2409:8a55:35b5:d161:7b27:8c5a:c85a:3f21]:5456
+2026-03-04T07:16:00.545154Z  INFO zenoh::net::runtime::orchestrator: Zenoh can be reached at: tcp/[2409:8a55:35b5:d161:2445:d67e:b4f2:5eab]:5456
+2026-03-04T07:16:00.545316Z  INFO zenoh::net::runtime::orchestrator: Zenoh can be reached at: tcp/[fe80::af79:68fe:a6aa:a83d]:5456
+2026-03-04T07:16:00.545326Z  INFO zenoh::net::runtime::orchestrator: Zenoh can be reached at: tcp/[fe80::5f9:cb49:433a:cc14]:5456
+2026-03-04T07:16:00.545330Z  INFO zenoh::net::runtime::orchestrator: Zenoh can be reached at: tcp/[fe80::da1a:c9d3:fa2c:d438]:5456
+2026-03-04T07:16:00.545334Z  INFO zenoh::net::runtime::orchestrator: Zenoh can be reached at: tcp/10.0.0.1:5456
+2026-03-04T07:16:00.545337Z  INFO zenoh::net::runtime::orchestrator: Zenoh can be reached at: tcp/172.20.0.1:5456
+2026-03-04T07:16:00.545341Z  INFO zenoh::net::runtime::orchestrator: Zenoh can be reached at: tcp/192.168.68.21:5456
+2026-03-04T07:16:00.545572Z  INFO zenoh::net::runtime::orchestrator: zenohd listening scout messages on 224.0.0.224:7446
+2026-03-04T07:16:01.049256Z  WARN zenoh::net::runtime::orchestrator: Scouting delay elapsed before start conditions are met.
+2026-03-04T07:20:15.833404Z  INFO run_inner{[3mself.daemon_id[0m[2m=[0mDaemonId { machine_id: None, uuid: 08ce7754-d46f-46ac-8e25-9faf02cb2872 }}: dora_daemon: received ctrlc signal -> stopping all dataflows
+2026-03-04T07:20:15.834345Z  INFO run_inner{[3mself.daemon_id[0m[2m=[0mDaemonId { machine_id: None, uuid: 08ce7754-d46f-46ac-8e25-9faf02cb2872 }}: zenoh::api::session: close session zid=37ec8c066f4a8a11d5330c84b62ffac5

@@ -1,0 +1,175 @@
+﻿/* 鑺傜偣闈㈡澘鏍峰紡 */
+.node-panel {
+  width: 320px;
+  height: 100%;
+  background: #f5f5f5;
+  border-right: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 鏍囬鏍?*/
+.node-panel-header {
+  padding: 16px;
+  background: #2196F3;
+  color: white;
+  border-bottom: 1px solid #1976D2;
+}
+
+.node-panel-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* 鎼滅储妗?*/
+.node-search {
+  padding: 12px 16px;
+  background: white;
+  border-bottom: 1px solid #ddd;
+  position: relative;
+}
+
+.node-search input {
+  width: 100%;
+  padding: 8px 32px 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.node-search input:focus {
+  outline: none;
+  border-color: #2196F3;
+}
+
+.search-icon {
+  position: absolute;
+  right: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
+  opacity: 0.5;
+}
+
+/* 鑺傜偣鍒楄〃 */
+.node-featured {
+  padding: 10px 8px 2px;
+  border-bottom: 1px solid #ddd;
+  background: #f8fbff;
+}
+
+.node-featured-header {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1b4f8a;
+  margin: 0 4px 8px;
+}
+
+.node-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 6px;
+}
+
+.node-list-content {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 婊氬姩鏉℃牱寮?*/
+.node-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.node-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.node-list::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+.node-list::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* 鑺傜偣妯℃澘椤?*/
+.node-template-item {
+  padding: 7px 9px;
+  margin: 0;
+  background: #ffffff;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.node-template-item:hover {
+  background: #eef6ff;
+}
+
+.node-template-item.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+/* 鑺傜偣淇℃伅 */
+.node-info {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.node-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+.node-type {
+  font-size: 11px;
+  color: #718096;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.node-item-separator {
+  height: 2px;
+  margin-top: 5px;
+  background: #2563eb;
+  opacity: 0.75;
+  border-radius: 1px;
+}
+
+/* 绌虹姸鎬?*/
+.empty-state {
+  padding: 40px 20px;
+  text-align: center;
+  color: #999;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* 鍝嶅簲寮忚皟鏁?*/
+@media (max-width: 768px) {
+  .node-panel {
+    width: 100%;
+    height: auto;
+    max-height: 40vh;
+  }
+}
+

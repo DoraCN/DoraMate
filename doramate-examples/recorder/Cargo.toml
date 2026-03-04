@@ -1,0 +1,12 @@
+[package]
+name = "recorder"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dora-node-api = "0.3.13"
+opencv = { version = "0.98.0", features = ["videoio", "imgcodecs", "imgproc"] }
+anyhow = "1.0"
+
+[build-dependencies]
+opencv = { version = "0.98.0", features = ["videoio", "imgcodecs", "imgproc"] }

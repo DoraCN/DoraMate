@@ -1,0 +1,438 @@
+/* ========================================
+   工具栏样式
+   ======================================== */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start; /* 左对齐 */
+  padding: 8px 16px;
+  background: #252526;
+  border-bottom: 1px solid #333;
+  min-height: 48px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  flex-wrap: wrap; /* 允许换行 */
+  gap: 4px; /* 按钮之间的间距 */
+}
+
+/* 分隔符 */
+.toolbar-separator {
+  width: 1px;
+  height: 24px;
+  background: #3e3e42;
+  margin: 0 8px;
+  flex-shrink: 0;
+}
+
+/* 弹性空间，将右侧按钮推到右边 */
+.toolbar-spacer {
+  flex: 1 1 auto;
+  min-width: 20px;
+}
+
+.recent-files-dropdown {
+  position: relative;
+}
+
+.recent-files-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.recent-files-button:hover:not(:disabled) {
+  background: #3c3c3c;
+  border-color: #4a4a4a;
+}
+
+.recent-files-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.recent-files-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 300px;
+  max-width: 420px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  background: #1f1f20;
+  border: 1px solid #3e3e42;
+  border-radius: 6px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+}
+
+.recent-files-header {
+  padding: 4px 8px 8px;
+  font-size: 12px;
+  color: #9a9a9a;
+}
+
+.recent-files-empty {
+  padding: 10px 8px;
+  font-size: 12px;
+  color: #8a8a8a;
+}
+
+.recent-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.recent-file-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #d6d6d6;
+  cursor: pointer;
+  text-align: left;
+}
+
+.recent-file-item:hover:not(:disabled) {
+  background: #2c2c2f;
+  border-color: #414146;
+}
+
+.recent-file-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.recent-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.recent-file-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #8f8f94;
+}
+
+/* 工具栏按钮包装器 */
+.toolbar-button-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+/* 工具栏按钮 */
+.toolbar-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  position: relative;
+}
+
+.toolbar-button:hover:not(:disabled) {
+  background: #3c3c3c;
+  border-color: #4a4a4a;
+}
+
+.toolbar-button:active:not(:disabled) {
+  background: #404040;
+  transform: translateY(1px);
+}
+
+.toolbar-button:focus {
+  outline: none;
+  border-color: #007acc;
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.3);
+}
+
+.toolbar-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 按钮变体 */
+.toolbar-button.variant.success {
+  background: #28a745;
+  border-color: #28a745;
+}
+
+.toolbar-button.variant.success:hover:not(:disabled) {
+  background: #218838;
+  border-color: #1e7e34;
+}
+
+.toolbar-button.variant.danger {
+  background: #dc3545;
+  border-color: #dc3545;
+}
+
+.toolbar-button.variant.danger:hover:not(:disabled) {
+  background: #c82333;
+  border-color: #bd2130;
+}
+
+/* 按钮图标 */
+.button-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* 按钮标签 */
+.button-label {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 未保存指示器 */
+.unsaved-indicator {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  background: #ffc107;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* 确认状态 */
+.toolbar-button-wrapper.confirm-pending .toolbar-button {
+  border-color: #ffc107;
+  background: rgba(255, 193, 7, 0.1);
+}
+
+.confirm-hint {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ffc107;
+  color: #000;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  animation: slideUp 0.3s ease;
+  z-index: 100;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* 快捷键提示 */
+.shortcut-hint {
+  position: absolute;
+  bottom: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: #858585;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.toolbar-button-wrapper:hover .shortcut-hint {
+  opacity: 1;
+}
+
+/* 禁用状态 */
+.toolbar-button-wrapper.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* 有未保存更改 */
+.toolbar-button-wrapper.has-unsaved::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 6px;
+  background: #ffc107;
+  border-radius: 50%;
+}
+
+/* 状态指示器 */
+.toolbar-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #858585;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: #2d2d30;
+  border-radius: 12px;
+  transition: all 0.3s;
+}
+
+.status-dot {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.status-indicator.running {
+  background: rgba(40, 167, 69, 0.2);
+  color: #28a745;
+}
+
+.status-indicator.running .status-dot {
+  animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.status-indicator.stopped {
+  background: rgba(108, 117, 125, 0.2);
+  color: #6c757d;
+}
+
+.status-indicator.unsaved {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.status-indicator.unsaved .status-dot {
+  animation: pulse 2s infinite;
+}
+
+.status-indicator.loading {
+  background: rgba(0, 122, 204, 0.2);
+  color: #007acc;
+}
+
+.loading-spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 工具提示增强 */
+.toolbar-button[title] {
+  position: relative;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .toolbar-button .button-label {
+    display: none;
+  }
+
+  .toolbar-button {
+    padding: 8px;
+    min-width: 36px;
+    justify-content: center;
+  }
+
+  .shortcut-hint {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .toolbar {
+    padding: 6px 8px;
+    gap: 4px;
+  }
+
+  /* 在小屏幕上，隐藏弹性空间，让所有按钮自然流动 */
+  .toolbar-spacer {
+    display: none;
+  }
+
+  .toolbar-separator {
+    margin: 0 4px;
+  }
+}
+
+/* 深色主题优化 */
+@media (prefers-color-scheme: dark) {
+  .toolbar {
+    background: #1e1e1e;
+    border-bottom-color: #333;
+  }
+
+  .toolbar-button:hover:not(:disabled) {
+    background: #2d2d30;
+    border-color: #3e3e42;
+  }
+}
+
+/* 可访问性 */
+.toolbar-button:focus-visible {
+  outline: 2px solid #007acc;
+  outline-offset: 2px;
+}
+
+/* 打印样式 */
+@media print {
+  .toolbar {
+    display: none;
+  }
+}
