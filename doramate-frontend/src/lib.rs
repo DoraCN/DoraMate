@@ -2619,32 +2619,96 @@ pub fn App() -> impl IntoView {
             spawn_local(async move {
                 log::info!("call LocalAgent stop API: {}", process_id);
 
+                let apply_stopped_state = || {
+                    set_is_running.set(false);
+                    set_current_process_id.set(None);
+                    set_start_time.set(None);
+                    set_uptime.set(0);
+                    set_total_nodes.set(0);
+                    set_running_nodes.set(0);
+                    set_error_nodes.set(0);
+                    set_node_runtime_states.set(HashMap::new());
+                    disconnect_status_stream();
+                };
+
                 match api::stop_dataflow(&process_id).await {
                     Ok(response) => {
                         if response.success {
-                            set_is_running.set(false);
-                            set_current_process_id.set(None);
-                            set_start_time.set(None);
-                            set_uptime.set(0);
-                            set_total_nodes.set(0);
-                            set_running_nodes.set(0);
-                            set_error_nodes.set(0);
-                            set_node_runtime_states.set(HashMap::new());
-                            disconnect_status_stream();
+                            apply_stopped_state();
+                            if response.error_code.is_some() {
+                                log::warn!(
+                                    "stop completed with warning: {}",
+                                    api::friendly_error_message(
+                                        response.error_code.as_deref(),
+                                        &response.message,
+                                    )
+                                );
+                            }
                             log::info!("dataflow stopped");
                         } else {
-                            log::error!(
-                                "stop failed: {}",
-                                api::friendly_error_message(
-                                    response.error_code.as_deref(),
-                                    &response.message,
-                                )
+                            let stop_message = api::friendly_error_message(
+                                response.error_code.as_deref(),
+                                &response.message,
                             );
+                            match api::get_dataflow_status(&process_id).await {
+                                Ok(status)
+                                    if matches!(status.status.as_str(), "stopped" | "not_found") =>
+                                {
+                                    log::warn!(
+                                        "stop returned failure but process already {}: {}",
+                                        status.status,
+                                        stop_message
+                                    );
+                                    apply_stopped_state();
+                                    log::info!("dataflow stopped");
+                                }
+                                Ok(status) => {
+                                    log::error!(
+                                        "stop failed: {} (current status: {})",
+                                        stop_message,
+                                        status.status
+                                    );
+                                }
+                                Err(status_err) => {
+                                    log::error!(
+                                        "stop failed: {} (status check failed: {})",
+                                        stop_message,
+                                        status_err
+                                    );
+                                }
+                            }
                         }
                     }
                     Err(e) => {
-                        log::error!("API call failed: {}", e);
-                        disconnect_status_stream();
+                        match api::get_dataflow_status(&process_id).await {
+                            Ok(status)
+                                if matches!(status.status.as_str(), "stopped" | "not_found") =>
+                            {
+                                log::warn!(
+                                    "stop API call failed but process already {}: {}",
+                                    status.status,
+                                    e
+                                );
+                                apply_stopped_state();
+                                log::info!("dataflow stopped");
+                            }
+                            Ok(status) => {
+                                log::error!(
+                                    "API call failed: {} (current status: {})",
+                                    e,
+                                    status.status
+                                );
+                                disconnect_status_stream();
+                            }
+                            Err(status_err) => {
+                                log::error!(
+                                    "API call failed: {} (status check failed: {})",
+                                    e,
+                                    status_err
+                                );
+                                disconnect_status_stream();
+                            }
+                        }
                     }
                 }
             });
@@ -2994,19 +3058,17 @@ pub fn App() -> impl IntoView {
         let set_has_unsaved_changes = set_has_unsaved_changes.clone();
         move |template: NodeTemplate| {
             set_nodes.update(|nodes| {
-                let type_count = nodes
+                let used_ids: HashSet<&str> = nodes.iter().map(|n| n.id.as_str()).collect();
+                let mut instance_number = nodes
                     .iter()
                     .filter(|n| n.node_type == template.node_type)
-                    .count();
-                let instance_number = type_count + 1;
-
-                let timestamp = js_sys::Date::now();
-                let node_id = format!(
-                    "{}_{:03}_{:010}",
-                    template.node_type,
-                    instance_number,
-                    (timestamp * 1000000.0) as u64
-                );
+                    .count()
+                    + 1;
+                let mut node_id = format!("{}_{}", template.node_type, instance_number);
+                while used_ids.contains(node_id.as_str()) {
+                    instance_number += 1;
+                    node_id = format!("{}_{}", template.node_type, instance_number);
+                }
 
                 let label = format!("{} #{}", template.name, instance_number);
 
@@ -3337,6 +3399,10 @@ pub fn App() -> impl IntoView {
                         set_nodes=set_nodes
                         connections=connections.into()
                         set_connections=set_connections
+                        is_running=is_running
+                        set_selected_node_id=set_selected_node_id
+                        set_selected_node_ids=set_selected_node_ids
+                        set_has_unsaved_changes=set_has_unsaved_changes
                     />
                 </div>
             </div>
@@ -3477,16 +3543,30 @@ pub fn App() -> impl IntoView {
                                                 conns.retain(|c| c != &conn_clone);
                                             });
 
-                                            let from_id_prefix = format!("{}/", conn.from);
+                                            let expected_to_port =
+                                                conn.to_port.clone().unwrap_or_else(|| "in".to_string());
+                                            let expected_from_port = conn
+                                                .from_port
+                                                .clone()
+                                                .unwrap_or_else(|| "out".to_string());
+                                            let expected_source =
+                                                format!("{}/{}", conn.from, expected_from_port);
+                                            let expected_legacy_source = conn.from.clone();
                                             set_nodes.update(|nodes| {
                                                 if let Some(target) = nodes.iter_mut().find(|n| n.id == conn.to) {
                                                     if let Some(ref mut inputs) = target.inputs {
                                                         inputs.retain(|input| {
-                                                            let source = input
+                                                            let trimmed = input.trim();
+                                                            let (input_port, input_source) = input
                                                                 .split_once(':')
-                                                                .map(|(_, source)| source.trim())
-                                                                .unwrap_or_else(|| input.trim());
-                                                            !source.starts_with(&from_id_prefix)
+                                                                .map(|(port, source)| (port.trim(), source.trim()))
+                                                                .unwrap_or(("in", trimmed));
+
+                                                            let same_port = input_port == expected_to_port;
+                                                            let same_source = input_source == expected_source
+                                                                || (expected_from_port == "out"
+                                                                    && input_source == expected_legacy_source);
+                                                            !(same_port && same_source)
                                                         });
                                                     }
                                                 }

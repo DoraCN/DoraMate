@@ -85,6 +85,21 @@ button {
   background: #c82333;
 }
 
+.btn-rename {
+  background: #6f42c1;
+  color: white;
+  white-space: nowrap;
+}
+
+.btn-rename:hover {
+  background: #5a32a3;
+}
+
+.btn-rename:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
 .btn-add {
   background: #17a2b8;
   color: white;
@@ -226,6 +241,46 @@ button {
 /* 输入包装器 */
 .input-wrapper {
   position: relative;
+}
+
+.id-edit-row {
+  display: flex;
+  gap: 8px;
+}
+
+.rename-running-hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #f0ad4e;
+}
+
+.rename-preview {
+  margin: 12px 0 16px;
+  padding: 10px;
+  border: 1px solid #3e3e42;
+  border-left: 3px solid #6f42c1;
+  border-radius: 4px;
+  background: #252530;
+}
+
+.rename-preview-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #d7b8ff;
+  margin-bottom: 6px;
+}
+
+.rename-preview-line {
+  font-size: 12px;
+  color: #d0d0d0;
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.rename-preview-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 /* 错误消息 */

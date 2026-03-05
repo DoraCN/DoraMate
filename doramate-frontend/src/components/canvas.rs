@@ -109,6 +109,12 @@ fn select_target_input_port(target_node: &Node, preferred_port: &str) -> (String
             return (port_name, Some(idx));
         }
 
+        if !preferred.is_empty() {
+            // No matching/empty slot: create a new mapping for the preferred input port
+            // instead of overwriting the first existing bound input.
+            return (preferred.to_string(), None);
+        }
+
         if let Some((idx, port_name)) = inputs
             .iter()
             .enumerate()
