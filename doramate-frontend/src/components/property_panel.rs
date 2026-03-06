@@ -4,6 +4,13 @@ use crate::types::{Connection, Node};
 use leptos::prelude::*;
 use std::collections::{HashMap, HashSet};
 
+const IMMUTABLE_BUILTIN_CUSTOM_NODE_TYPES: [&str; 4] =
+    ["python_custom", "rust_custom", "c_custom", "csharp_custom"];
+
+fn is_builtin_locked_custom_node_type(node_type: &str) -> bool {
+    IMMUTABLE_BUILTIN_CUSTOM_NODE_TYPES.contains(&node_type.trim())
+}
+
 /// ========================================
 /// 属性面板主组件
 /// ========================================
@@ -88,6 +95,7 @@ pub fn PropertyPanel(
         let node = selected_node.get().unwrap();
         let data = edit_data_for_action.get();
         let mut errors = HashMap::new();
+        let is_builtin_locked = is_builtin_locked_custom_node_type(&node.node_type);
 
         // 验证节点标签
         if data.label.trim().is_empty() {
@@ -110,7 +118,11 @@ pub fn PropertyPanel(
         // 检测输出端口变更并同步更新下游节点
         // ========================================
         let old_outputs = node.outputs.clone().unwrap_or_default();
-        let new_outputs = data.outputs.clone();
+        let new_outputs = if is_builtin_locked {
+            old_outputs.clone()
+        } else {
+            data.outputs.clone()
+        };
 
         // 收集需要更新的端口变更 (old_name, new_name)
         let port_changes: Vec<(String, String)> = old_outputs
@@ -214,17 +226,19 @@ pub fn PropertyPanel(
                 // 注意：config 由 MinimalParameterEditor 管理，这里不再处理
                 // 避免与 MinimalParameterEditor 的配置管理冲突
 
-                // 更新端口
-                if !data.inputs.is_empty() {
-                    n.inputs = Some(data.inputs.clone());
-                } else {
-                    n.inputs = None;
-                }
+                // 内置类型只锁定输入/输出；其余字段仍允许修改
+                if !is_builtin_locked {
+                    if !data.inputs.is_empty() {
+                        n.inputs = Some(data.inputs.clone());
+                    } else {
+                        n.inputs = None;
+                    }
 
-                if !data.outputs.is_empty() {
-                    n.outputs = Some(data.outputs.clone());
-                } else {
-                    n.outputs = None;
+                    if !data.outputs.is_empty() {
+                        n.outputs = Some(data.outputs.clone());
+                    } else {
+                        n.outputs = None;
+                    }
                 }
             }
         });
@@ -338,8 +352,7 @@ pub fn PropertyPanel(
 
                     if let Some(inputs) = node.inputs.as_mut() {
                         for input in inputs.iter_mut() {
-                            if let Some(updated) =
-                                rewrite_input_reference(input, &old_id, &new_id)
+                            if let Some(updated) = rewrite_input_reference(input, &old_id, &new_id)
                             {
                                 *input = updated;
                             }
@@ -392,14 +405,17 @@ pub fn PropertyPanel(
     // 重置为默认值
     let reset_to_default = Action::new(move |_: &()| {
         let node = selected_node.get().unwrap();
+        let is_builtin_locked = is_builtin_locked_custom_node_type(&node.node_type);
         let set_has_unsaved_changes = set_has_unsaved_changes;
         set_nodes.update(|nodes| {
             if let Some(n) = nodes.iter_mut().find(|n| n.id == node.id) {
                 // 重置为初始状态
                 n.env = None;
                 n.config = None;
-                n.inputs = None;
-                n.outputs = None;
+                if !is_builtin_locked {
+                    n.inputs = None;
+                    n.outputs = None;
+                }
                 n.label = n.node_type.clone();
             }
         });
@@ -476,7 +492,7 @@ pub fn PropertyPanel(
 
                             // 端口配置
                             <PortConfiguration
-                                _node=node.clone()
+                                node=node.clone()
                                 edit_data=edit_data.clone()
                                 set_edit_data
                                 edit_mode=edit_mode.clone()
@@ -912,11 +928,14 @@ fn EnvVariables(
 
 #[component]
 fn PortConfiguration(
-    _node: Node,
+    node: Node,
     edit_data: ReadSignal<EditData>,
     set_edit_data: WriteSignal<EditData>,
     edit_mode: ReadSignal<bool>,
 ) -> impl IntoView {
+    let is_builtin_locked = is_builtin_locked_custom_node_type(&node.node_type);
+    let can_edit_ports = move || edit_mode.get() && !is_builtin_locked;
+
     // 添加输入端口
     let add_input_port = move |_| {
         set_edit_data.update(|d| {
@@ -957,29 +976,35 @@ fn PortConfiguration(
                 <button
                     class="btn-add"
                     on:click=add_input_port
-                    style=move || if edit_mode.get() { "" } else { "display: none;" }
+                    style=move || if can_edit_ports() { "" } else { "display: none;" }
                 >
                     "+ 添加"
                 </button>
-                <div style=move || if edit_mode.get() { "display: none;" } else { "" }></div>
+                <div style=move || if can_edit_ports() { "display: none;" } else { "" }></div>
+            </div>
+
+            <div
+                class="readonly-hint"
+                style=move || if edit_mode.get() && is_builtin_locked { "" } else { "display: none;" }
+            >
+                "内置类型的输入/输出已锁定。可先修改“节点类型”为新类型并保存，再编辑端口。"
             </div>
 
             <div
                 class="empty-section"
-                style=move || if edit_data.get().inputs.is_empty() && !edit_mode.get() { "" } else { "display: none;" }
+                style=move || if edit_data.get().inputs.is_empty() && !can_edit_ports() { "" } else { "display: none;" }
             >
                 "未配置输入端口"
             </div>
             <div
                 class="ports-list"
-                style=move || if edit_data.get().inputs.is_empty() && !edit_mode.get() { "display: none;" } else { "" }
+                style=move || if edit_data.get().inputs.is_empty() && !can_edit_ports() { "display: none;" } else { "" }
             >
                 {move || {
                     edit_data.get().inputs.clone().into_iter()
                         .enumerate()
                         .map(|(index, port)| {
                             let port_clone = port.clone();
-                            let edit_mode_clone = edit_mode.clone();
                             view! {
                                 <div class="port-row input-port">
                                     <span class="port-icon">{ "\u{2192}" }</span>
@@ -991,22 +1016,22 @@ fn PortConfiguration(
                                         on:input=move |e| {
                                             update_port(index, event_target_value(&e), true);
                                         }
-                                        style=move || if edit_mode_clone.get() { "" } else { "display: none;" }
+                                        style=move || if can_edit_ports() { "" } else { "display: none;" }
                                     />
                                     <div
                                         class="port-name readonly"
-                                        style=move || if edit_mode.get() { "display: none;" } else { "" }
+                                        style=move || if can_edit_ports() { "display: none;" } else { "" }
                                     >
                                         {port_clone}
                                     </div>
                                     <button
                                         class="btn-remove"
                                         on:click=move |_| remove_port(index, true)
-                                        style=move || if edit_mode.get() { "" } else { "display: none;" }
+                                        style=move || if can_edit_ports() { "" } else { "display: none;" }
                                     >
                                         "×"
                                     </button>
-                                    <div style=move || if edit_mode.get() { "display: none;" } else { "" }></div>
+                                    <div style=move || if can_edit_ports() { "display: none;" } else { "" }></div>
                                 </div>
                             }
                         })
@@ -1019,29 +1044,28 @@ fn PortConfiguration(
                 <button
                     class="btn-add"
                     on:click=move |_| set_edit_data.update(|d| d.outputs.push("".to_string()))
-                    style=move || if edit_mode.get() { "" } else { "display: none;" }
+                    style=move || if can_edit_ports() { "" } else { "display: none;" }
                 >
                     "+ 添加"
                 </button>
-                <div style=move || if edit_mode.get() { "display: none;" } else { "" }></div>
+                <div style=move || if can_edit_ports() { "display: none;" } else { "" }></div>
             </div>
 
             <div
                 class="empty-section"
-                style=move || if edit_data.get().outputs.is_empty() && !edit_mode.get() { "" } else { "display: none;" }
+                style=move || if edit_data.get().outputs.is_empty() && !can_edit_ports() { "" } else { "display: none;" }
             >
                 "未配置输出端口"
             </div>
             <div
                 class="ports-list"
-                style=move || if edit_data.get().outputs.is_empty() && !edit_mode.get() { "display: none;" } else { "" }
+                style=move || if edit_data.get().outputs.is_empty() && !can_edit_ports() { "display: none;" } else { "" }
             >
                 {move || {
                     edit_data.get().outputs.clone().into_iter()
                         .enumerate()
                         .map(|(index, port)| {
                             let port_clone = port.clone();
-                            let edit_mode_clone = edit_mode.clone();
                             view! {
                                 <div class="port-row output-port">
                                     <span class="port-icon">{ "\u{2190}" }</span>
@@ -1053,22 +1077,22 @@ fn PortConfiguration(
                                         on:input=move |e| {
                                             update_port(index, event_target_value(&e), false);
                                         }
-                                        style=move || if edit_mode_clone.get() { "" } else { "display: none;" }
+                                        style=move || if can_edit_ports() { "" } else { "display: none;" }
                                     />
                                     <div
                                         class="port-name readonly"
-                                        style=move || if edit_mode.get() { "display: none;" } else { "" }
+                                        style=move || if can_edit_ports() { "display: none;" } else { "" }
                                     >
                                         {port_clone}
                                     </div>
                                     <button
                                         class="btn-remove"
                                         on:click=move |_| remove_port(index, false)
-                                        style=move || if edit_mode.get() { "" } else { "display: none;" }
+                                        style=move || if can_edit_ports() { "" } else { "display: none;" }
                                     >
                                         "×"
                                     </button>
-                                    <div style=move || if edit_mode.get() { "display: none;" } else { "" }></div>
+                                    <div style=move || if can_edit_ports() { "display: none;" } else { "" }></div>
                                 </div>
                             }
                         })
@@ -1144,7 +1168,10 @@ fn build_node_id_rename_preview(
     old_id: &str,
     new_id: &str,
 ) -> NodeIdRenamePreview {
-    let source_connection_updates = connections.iter().filter(|conn| conn.from == old_id).count();
+    let source_connection_updates = connections
+        .iter()
+        .filter(|conn| conn.from == old_id)
+        .count();
     let target_connection_updates = connections.iter().filter(|conn| conn.to == old_id).count();
 
     let mut input_reference_updates = 0usize;

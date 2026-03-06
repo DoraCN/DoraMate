@@ -48,6 +48,10 @@ const AUTO_LAYOUT_ORDER_SWEEPS: usize = 2;
 const CUSTOM_NODE_TYPE_ALLOWLIST: [&str; 4] =
     ["python_custom", "rust_custom", "c_custom", "csharp_custom"];
 
+fn is_builtin_locked_custom_node_type(node_type: &str) -> bool {
+    CUSTOM_NODE_TYPE_ALLOWLIST.contains(&node_type.trim())
+}
+
 thread_local! {
     static STATUS_STREAM: RefCell<Option<api::StatusWebSocket>> = const { RefCell::new(None) };
 }
@@ -1065,6 +1069,12 @@ fn merge_node_template(existing: &NodeTemplate, incoming: &NodeTemplate) -> Node
     merged.path = incoming.path.clone().or_else(|| existing.path.clone());
     merged.inputs = merge_ports(existing.inputs.clone(), incoming.inputs.clone());
     merged.outputs = merge_ports(existing.outputs.clone(), incoming.outputs.clone());
+
+    // Keep built-in custom node I/O immutable while allowing other fields to be updated.
+    if is_builtin_locked_custom_node_type(&existing.node_type) {
+        merged.inputs = existing.inputs.clone();
+        merged.outputs = existing.outputs.clone();
+    }
     merged
 }
 
@@ -1441,7 +1451,7 @@ mod open_flow_state_tests {
                 x: 0.0,
                 y: 0.0,
                 label: "n1".to_string(),
-                node_type: "python_custom".to_string(),
+                node_type: "custom_vision".to_string(),
                 path: Some(" ./process.py ".to_string()),
                 env: None,
                 config: None,
@@ -1458,7 +1468,7 @@ mod open_flow_state_tests {
                 x: 10.0,
                 y: 10.0,
                 label: "n2".to_string(),
-                node_type: "python_custom".to_string(),
+                node_type: "custom_vision".to_string(),
                 path: None,
                 env: None,
                 config: None,
@@ -1472,7 +1482,7 @@ mod open_flow_state_tests {
         assert_eq!(templates.len(), 1);
 
         let template = &templates[0];
-        assert_eq!(template.node_type, "python_custom");
+        assert_eq!(template.node_type, "custom_vision");
         assert_eq!(template.path.as_deref(), Some("./process.py"));
         assert_eq!(
             template.inputs,
@@ -1488,17 +1498,17 @@ mod open_flow_state_tests {
     fn test_config_entries_to_node_templates_normalizes_and_upserts() {
         let entries = vec![
             api::NodeTemplateConfigEntry {
-                node_type: "python_custom".to_string(),
-                name: "Legacy Python".to_string(),
+                node_type: "custom_detector".to_string(),
+                name: "Legacy Detector".to_string(),
                 description: "legacy".to_string(),
                 icon: "".to_string(),
-                path: Some(" ./old.py ".to_string()),
+                path: Some(" ./detector.py ".to_string()),
                 inputs: Some(vec!["image".to_string(), "IMAGE".to_string()]),
                 outputs: Some(vec!["result".to_string()]),
             },
             api::NodeTemplateConfigEntry {
-                node_type: " python_custom ".to_string(),
-                name: " Python Custom ".to_string(),
+                node_type: " custom_detector ".to_string(),
+                name: " Custom Detector ".to_string(),
                 description: " latest ".to_string(),
                 icon: " 🐍 ".to_string(),
                 path: Some("  ".to_string()),
@@ -1511,18 +1521,128 @@ mod open_flow_state_tests {
         assert_eq!(templates.len(), 1);
 
         let template = &templates[0];
-        assert_eq!(template.id, "cfg_python_custom");
+        assert_eq!(template.id, "cfg_custom_detector");
         assert_eq!(template.category, NodeCategory::Custom);
-        assert_eq!(template.node_type, "python_custom");
-        assert_eq!(template.name, "Python Custom");
+        assert_eq!(template.node_type, "custom_detector");
+        assert_eq!(template.name, "Custom Detector");
         assert_eq!(template.description, "latest");
         assert_eq!(template.icon, "🐍");
-        assert_eq!(template.path.as_deref(), Some("./old.py"));
+        assert_eq!(template.path.as_deref(), Some("./detector.py"));
         assert_eq!(
             template.inputs,
             Some(vec!["image".to_string(), "meta".to_string()])
         );
         assert_eq!(template.outputs, Some(vec!["result".to_string()]));
+    }
+
+    #[test]
+    fn test_config_entries_to_node_templates_keeps_builtin_locked_types() {
+        let entries = vec![
+            api::NodeTemplateConfigEntry {
+                node_type: "python_custom".to_string(),
+                name: "Overridden".to_string(),
+                description: "should be ignored".to_string(),
+                icon: "x".to_string(),
+                path: Some("./override.py".to_string()),
+                inputs: Some(vec!["in".to_string()]),
+                outputs: Some(vec!["out".to_string()]),
+            },
+            api::NodeTemplateConfigEntry {
+                node_type: "custom_x".to_string(),
+                name: "Custom X".to_string(),
+                description: "kept".to_string(),
+                icon: "x".to_string(),
+                path: None,
+                inputs: None,
+                outputs: None,
+            },
+        ];
+
+        let templates = config_entries_to_node_templates(entries);
+        assert_eq!(templates.len(), 2);
+        assert!(templates.iter().any(|t| t.node_type == "python_custom"));
+        assert!(templates.iter().any(|t| t.node_type == "custom_x"));
+    }
+
+    #[test]
+    fn test_node_templates_to_config_entries_keeps_builtin_locked_types() {
+        let templates = vec![
+            NodeTemplate {
+                id: "python_custom".to_string(),
+                name: "Python Custom".to_string(),
+                description: "builtin".to_string(),
+                category: NodeCategory::Custom,
+                node_type: "python_custom".to_string(),
+                icon: "p".to_string(),
+                path: Some("./override.py".to_string()),
+                inputs: Some(vec!["in".to_string()]),
+                outputs: Some(vec!["out".to_string()]),
+            },
+            NodeTemplate {
+                id: "custom_x".to_string(),
+                name: "Custom X".to_string(),
+                description: "custom".to_string(),
+                category: NodeCategory::Custom,
+                node_type: "custom_x".to_string(),
+                icon: "x".to_string(),
+                path: None,
+                inputs: None,
+                outputs: None,
+            },
+        ];
+
+        let entries = node_templates_to_config_entries(&templates);
+        assert_eq!(entries.len(), 2);
+        assert!(entries.iter().any(|e| e.node_type == "python_custom"));
+        assert!(entries.iter().any(|e| e.node_type == "custom_x"));
+    }
+
+    #[test]
+    fn test_merge_node_template_sources_keeps_builtin_locked_io_immutable() {
+        let builtin = NodeTemplate {
+            id: "python_custom".to_string(),
+            name: "Python Custom".to_string(),
+            description: "builtin".to_string(),
+            category: NodeCategory::Custom,
+            node_type: "python_custom".to_string(),
+            icon: "p".to_string(),
+            path: None,
+            inputs: Some(vec!["input".to_string()]),
+            outputs: Some(vec!["output".to_string()]),
+        };
+        let persisted_override = NodeTemplate {
+            id: "cfg_python_custom".to_string(),
+            name: "Override".to_string(),
+            description: "override".to_string(),
+            category: NodeCategory::Custom,
+            node_type: "python_custom".to_string(),
+            icon: "x".to_string(),
+            path: Some("./override.py".to_string()),
+            inputs: Some(vec!["in".to_string()]),
+            outputs: Some(vec!["out".to_string()]),
+        };
+        let yaml_override = NodeTemplate {
+            id: "yaml_python_custom".to_string(),
+            name: "Yaml Override".to_string(),
+            description: "yaml".to_string(),
+            category: NodeCategory::Custom,
+            node_type: "python_custom".to_string(),
+            icon: "y".to_string(),
+            path: Some("./yaml.py".to_string()),
+            inputs: Some(vec!["yin".to_string()]),
+            outputs: Some(vec!["yout".to_string()]),
+        };
+
+        let merged = merge_node_template_sources(
+            &[builtin.clone()],
+            &[persisted_override],
+            &[yaml_override],
+        );
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].node_type, "python_custom");
+        assert_eq!(merged[0].inputs, builtin.inputs);
+        assert_eq!(merged[0].outputs, builtin.outputs);
+        assert_eq!(merged[0].path.as_deref(), Some("./yaml.py"));
     }
 
     #[test]
@@ -2652,7 +2772,10 @@ pub fn App() -> impl IntoView {
                             );
                             match api::get_dataflow_status(&process_id).await {
                                 Ok(status)
-                                    if matches!(status.status.as_str(), "stopped" | "not_found") =>
+                                    if matches!(
+                                        status.status.as_str(),
+                                        "stopped" | "not_found"
+                                    ) =>
                                 {
                                     log::warn!(
                                         "stop returned failure but process already {}: {}",
@@ -2679,37 +2802,33 @@ pub fn App() -> impl IntoView {
                             }
                         }
                     }
-                    Err(e) => {
-                        match api::get_dataflow_status(&process_id).await {
-                            Ok(status)
-                                if matches!(status.status.as_str(), "stopped" | "not_found") =>
-                            {
-                                log::warn!(
-                                    "stop API call failed but process already {}: {}",
-                                    status.status,
-                                    e
-                                );
-                                apply_stopped_state();
-                                log::info!("dataflow stopped");
-                            }
-                            Ok(status) => {
-                                log::error!(
-                                    "API call failed: {} (current status: {})",
-                                    e,
-                                    status.status
-                                );
-                                disconnect_status_stream();
-                            }
-                            Err(status_err) => {
-                                log::error!(
-                                    "API call failed: {} (status check failed: {})",
-                                    e,
-                                    status_err
-                                );
-                                disconnect_status_stream();
-                            }
+                    Err(e) => match api::get_dataflow_status(&process_id).await {
+                        Ok(status) if matches!(status.status.as_str(), "stopped" | "not_found") => {
+                            log::warn!(
+                                "stop API call failed but process already {}: {}",
+                                status.status,
+                                e
+                            );
+                            apply_stopped_state();
+                            log::info!("dataflow stopped");
                         }
-                    }
+                        Ok(status) => {
+                            log::error!(
+                                "API call failed: {} (current status: {})",
+                                e,
+                                status.status
+                            );
+                            disconnect_status_stream();
+                        }
+                        Err(status_err) => {
+                            log::error!(
+                                "API call failed: {} (status check failed: {})",
+                                e,
+                                status_err
+                            );
+                            disconnect_status_stream();
+                        }
+                    },
                 }
             });
         }
