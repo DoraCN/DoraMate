@@ -24,6 +24,7 @@ pub fn SaveFileDialog(
     set_state: WriteSignal<DialogState>,
     /// YAML内容
     yaml_content: Signal<String>,
+    layout_sidecar_content: Signal<String>,
     /// 保存成功回调（返回文件名）
     on_save_success: Callback<String>,
     /// 已保存的文件列表（用于检测覆盖）
@@ -58,6 +59,7 @@ pub fn SaveFileDialog(
     // 执行保存（先检查是否需要确认覆盖）
     let save_file = {
         let yaml_content = yaml_content.clone();
+        let layout_sidecar_content = layout_sidecar_content.clone();
         let saved_files = saved_files.clone();
         move |_| {
             let current_filename = filename.get();
@@ -76,6 +78,7 @@ pub fn SaveFileDialog(
                         // 直接保存
                         execute_save(
                             yaml_content.clone(),
+                            layout_sidecar_content.clone(),
                             current_filename,
                             set_state.clone(),
                             on_save_success.clone(),
@@ -92,9 +95,11 @@ pub fn SaveFileDialog(
     // 确认覆盖并保存
     let confirm_overwrite = {
         let yaml_content = yaml_content.clone();
+        let layout_sidecar_content = layout_sidecar_content.clone();
         move |filename_to_save: String| {
             execute_save(
                 yaml_content.clone(),
+                layout_sidecar_content.clone(),
                 filename_to_save,
                 set_state.clone(),
                 on_save_success.clone(),
@@ -105,6 +110,7 @@ pub fn SaveFileDialog(
     // 执行保存（使用 trigger_download）
     fn execute_save(
         yaml_content: Signal<String>,
+        layout_sidecar_content: Signal<String>,
         filename: String,
         set_state: WriteSignal<DialogState>,
         on_save_success: Callback<String>,
@@ -112,21 +118,27 @@ pub fn SaveFileDialog(
         set_state.set(DialogState::Saving);
 
         let yaml = yaml_content.get();
-        trigger_download(&yaml, &filename);
+        trigger_download(&yaml, &filename, "application/yaml");
+        let sidecar_json = layout_sidecar_content.get();
+        if !sidecar_json.trim().is_empty() {
+            let sidecar_name =
+                crate::utils::layout_sidecar::sidecar_file_name_for_yaml_file_name(&filename);
+            trigger_download(&sidecar_json, &sidecar_name, "application/json");
+        }
         set_state.set(DialogState::Success(filename.clone()));
         on_save_success.run(filename);
     }
 
     // 触发浏览器下载
-    fn trigger_download(yaml: &str, filename: &str) {
+    fn trigger_download(content: &str, filename: &str, mime_type: &str) {
         use web_sys::{Blob, BlobPropertyBag, Url};
 
         // 创建 Blob
         let array = js_sys::Array::new();
-        array.push(&wasm_bindgen::JsValue::from_str(yaml));
+        array.push(&wasm_bindgen::JsValue::from_str(content));
 
         let blob_options = BlobPropertyBag::new();
-        blob_options.set_type("text/yaml");
+        blob_options.set_type(mime_type);
 
         let blob = Blob::new_with_str_sequence_and_options(&array, &blob_options).unwrap();
 

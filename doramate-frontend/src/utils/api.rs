@@ -77,6 +77,33 @@ pub struct ReadDataflowFileRequest {
     pub file_path: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SaveDataflowFileRequest {
+    pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_file_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub working_dir: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct WriteDataflowFileRequest {
+    pub file_path: String,
+    pub content: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SaveDataflowFileResponse {
+    pub success: bool,
+    pub cancelled: bool,
+    pub file_path: Option<String>,
+    pub file_name: Option<String>,
+    pub working_dir: Option<String>,
+    pub message: String,
+    #[serde(default)]
+    pub error_code: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct NodeTemplateConfigEntry {
     pub node_type: String,
@@ -168,8 +195,13 @@ pub fn friendly_error_message(error_code: Option<&str>, fallback_message: &str) 
             "Failed to open directory picker in LocalAgent.".to_string()
         }
         Some("FILE_PICKER_FAILED") => "Failed to open file picker in LocalAgent.".to_string(),
+        Some("FILE_SAVE_CANCELLED") => "Save file cancelled.".to_string(),
+        Some("FILE_SAVE_DIALOG_FAILED") => "Failed to open save file dialog in LocalAgent.".to_string(),
         Some("FILE_READ_FAILED") => {
             "Failed to read file content. Check path and permissions.".to_string()
+        }
+        Some("FILE_WRITE_FAILED") => {
+            "Failed to write file content. Check path and permissions.".to_string()
         }
         Some("FILE_PATH_EMPTY") => "File path is empty.".to_string(),
         Some("NODE_TEMPLATES_CONFIG_PATH_UNAVAILABLE") => {
@@ -287,6 +319,46 @@ pub async fn read_dataflow_file(file_path: &str) -> Result<OpenDataflowFileRespo
     .await
 }
 
+pub async fn save_dataflow_file(
+    content: &str,
+    default_file_name: Option<&str>,
+    working_dir: Option<&str>,
+) -> Result<SaveDataflowFileResponse, String> {
+    let request = SaveDataflowFileRequest {
+        content: content.to_string(),
+        default_file_name: default_file_name.map(|v| v.to_string()),
+        working_dir: working_dir.map(|v| v.to_string()),
+    };
+    let body = serde_json::to_string(&request)
+        .map_err(|e| format!("save dataflow file failed: serialize request error {}", e))?;
+    fetch_json(
+        "POST",
+        "save-dataflow-file",
+        Some(body),
+        "save dataflow file",
+    )
+    .await
+}
+
+pub async fn write_dataflow_file(
+    file_path: &str,
+    content: &str,
+) -> Result<SaveDataflowFileResponse, String> {
+    let request = WriteDataflowFileRequest {
+        file_path: file_path.to_string(),
+        content: content.to_string(),
+    };
+    let body = serde_json::to_string(&request)
+        .map_err(|e| format!("write dataflow file failed: serialize request error {}", e))?;
+    fetch_json(
+        "POST",
+        "write-dataflow-file",
+        Some(body),
+        "write dataflow file",
+    )
+    .await
+}
+
 pub async fn load_node_templates_config() -> Result<NodeTemplatesConfigResponse, String> {
     fetch_json(
         "GET",
@@ -359,6 +431,14 @@ mod tests {
             "http://127.0.0.1:52100/api/read-dataflow-file"
         );
         assert_eq!(
+            format!("{}/save-dataflow-file", API_BASE),
+            "http://127.0.0.1:52100/api/save-dataflow-file"
+        );
+        assert_eq!(
+            format!("{}/write-dataflow-file", API_BASE),
+            "http://127.0.0.1:52100/api/write-dataflow-file"
+        );
+        assert_eq!(
             format!("{}/node-templates-config", API_BASE),
             "http://127.0.0.1:52100/api/node-templates-config"
         );
@@ -387,6 +467,10 @@ mod tests {
         let file_read_msg =
             friendly_error_message(Some("FILE_READ_FAILED"), "Failed to read selected file");
         assert!(file_read_msg.contains("read file content"));
+
+        let file_write_msg =
+            friendly_error_message(Some("FILE_WRITE_FAILED"), "Failed to write selected file");
+        assert!(file_write_msg.contains("write file content"));
 
         let unknown_code_msg = friendly_error_message(Some("UNKNOWN_CODE"), "raw backend message");
         assert_eq!(unknown_code_msg, "raw backend message");
@@ -436,6 +520,20 @@ mod tests {
         assert!(json.contains("\"path\":\"./process.py\""));
         assert!(json.contains("\"inputs\":[\"image\"]"));
         assert!(json.contains("\"outputs\":[\"result\"]"));
+    }
+
+    #[test]
+    fn test_save_dataflow_file_request_serialization() {
+        let req = SaveDataflowFileRequest {
+            content: "nodes: []\n".to_string(),
+            default_file_name: Some("dataflow.yml".to_string()),
+            working_dir: Some("C:/tmp".to_string()),
+        };
+
+        let json = serde_json::to_string(&req).expect("serialize save dataflow request");
+        assert!(json.contains("\"content\":\"nodes: []\\n\""));
+        assert!(json.contains("\"default_file_name\":\"dataflow.yml\""));
+        assert!(json.contains("\"working_dir\":\"C:/tmp\""));
     }
 
     #[cfg(target_arch = "wasm32")]

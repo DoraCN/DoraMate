@@ -27,8 +27,11 @@ const ERR_DIRECTORY_SELECTION_CANCELLED: &str = "DIRECTORY_SELECTION_CANCELLED";
 const ERR_DIRECTORY_PICKER_FAILED: &str = "DIRECTORY_PICKER_FAILED";
 const ERR_FILE_SELECTION_CANCELLED: &str = "FILE_SELECTION_CANCELLED";
 const ERR_FILE_PICKER_FAILED: &str = "FILE_PICKER_FAILED";
+const ERR_FILE_SAVE_CANCELLED: &str = "FILE_SAVE_CANCELLED";
+const ERR_FILE_SAVE_DIALOG_FAILED: &str = "FILE_SAVE_DIALOG_FAILED";
 const ERR_FILE_PATH_EMPTY: &str = "FILE_PATH_EMPTY";
 const ERR_FILE_READ_FAILED: &str = "FILE_READ_FAILED";
+const ERR_FILE_WRITE_FAILED: &str = "FILE_WRITE_FAILED";
 const ERR_NODE_TEMPLATES_CONFIG_PATH_UNAVAILABLE: &str = "NODE_TEMPLATES_CONFIG_PATH_UNAVAILABLE";
 const ERR_NODE_TEMPLATES_CONFIG_READ_FAILED: &str = "NODE_TEMPLATES_CONFIG_READ_FAILED";
 const ERR_NODE_TEMPLATES_CONFIG_WRITE_FAILED: &str = "NODE_TEMPLATES_CONFIG_WRITE_FAILED";
@@ -72,6 +75,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/select-directory", post(select_directory))
         .route("/api/open-dataflow-file", post(open_dataflow_file))
         .route("/api/read-dataflow-file", post(read_dataflow_file))
+        .route("/api/save-dataflow-file", post(save_dataflow_file))
+        .route("/api/write-dataflow-file", post(write_dataflow_file))
         .route(
             "/api/node-templates-config",
             get(read_node_templates_config).post(write_node_templates_config),
@@ -116,6 +121,8 @@ async fn index() -> Html<&'static str> {
             <li>POST /api/stop - Stop dataflow</li>
             <li>POST /api/open-dataflow-file - Open file picker and read YAML</li>
             <li>POST /api/read-dataflow-file - Read YAML by file path</li>
+            <li>POST /api/save-dataflow-file - Open save dialog and write YAML</li>
+            <li>POST /api/write-dataflow-file - Write YAML to path</li>
             <li>GET /api/node-templates-config - Load node templates config YAML</li>
             <li>POST /api/node-templates-config - Save node templates config YAML</li>
             <li>GET /api/status-stream/:process_id - WebSocket status stream</li>
@@ -238,6 +245,10 @@ impl LogEntry {
 
     fn stderr(message: String, process_id: Option<String>) -> Self {
         Self::new("error", "stderr", message, process_id)
+    }
+
+    fn stderr_info(message: String, process_id: Option<String>) -> Self {
+        Self::new("info", "stderr", message, process_id)
     }
 }
 
@@ -452,6 +463,33 @@ pub struct OpenDataflowFileResponse {
 #[derive(Deserialize, Debug)]
 pub struct ReadDataflowFileRequest {
     pub file_path: String,
+}
+
+/// 保存数据流文件请求
+#[derive(Deserialize, Debug)]
+pub struct SaveDataflowFileRequest {
+    pub content: String,
+    pub default_file_name: Option<String>,
+    pub working_dir: Option<String>,
+}
+
+/// 按路径写入数据流文件请求
+#[derive(Deserialize, Debug)]
+pub struct WriteDataflowFileRequest {
+    pub file_path: String,
+    pub content: String,
+}
+
+/// 保存数据流文件响应
+#[derive(Serialize)]
+pub struct SaveDataflowFileResponse {
+    pub success: bool,
+    pub cancelled: bool,
+    pub file_path: Option<String>,
+    pub file_name: Option<String>,
+    pub working_dir: Option<String>,
+    pub message: String,
+    pub error_code: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -1195,6 +1233,163 @@ async fn read_dataflow_file(
     }
 }
 
+fn file_name_and_working_dir(path: &std::path::Path) -> (Option<String>, Option<String>) {
+    let file_name = path.file_name().map(|name| name.to_string_lossy().to_string());
+    let working_dir = path.parent().map(|parent| parent.to_string_lossy().to_string());
+    (file_name, working_dir)
+}
+
+async fn write_text_file(path: std::path::PathBuf, content: String) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+            }
+        }
+        std::fs::write(&path, content).map_err(|e| format!("Failed to write file: {}", e))
+    })
+    .await
+    .map_err(|e| format!("Failed to write file in blocking task: {}", e))?
+}
+
+/// 通过系统对话框保存数据流文件 API
+async fn save_dataflow_file(
+    Json(req): Json<SaveDataflowFileRequest>,
+) -> Json<SaveDataflowFileResponse> {
+    let default_file_name = req
+        .default_file_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|v| v.to_string());
+    let initial_dir = req
+        .working_dir
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|v| v.to_string());
+
+    let picked = tokio::task::spawn_blocking(move || {
+        let mut dialog = rfd::FileDialog::new()
+            .set_title("Save DoraMate Dataflow")
+            .add_filter("YAML", &["yml", "yaml"]);
+        if let Some(dir) = initial_dir {
+            dialog = dialog.set_directory(dir);
+        }
+        if let Some(name) = default_file_name {
+            dialog = dialog.set_file_name(&name);
+        }
+        dialog.save_file()
+    })
+    .await;
+
+    let selected_path = match picked {
+        Ok(Some(path)) => path,
+        Ok(None) => {
+            return Json(SaveDataflowFileResponse {
+                success: false,
+                cancelled: true,
+                file_path: None,
+                file_name: None,
+                working_dir: None,
+                message: "Save file cancelled".to_string(),
+                error_code: Some(ERR_FILE_SAVE_CANCELLED.to_string()),
+            });
+        }
+        Err(e) => {
+            error!("Failed to open save file dialog: {}", e);
+            return Json(SaveDataflowFileResponse {
+                success: false,
+                cancelled: false,
+                file_path: None,
+                file_name: None,
+                working_dir: None,
+                message: format!("Failed to open save file dialog: {}", e),
+                error_code: Some(ERR_FILE_SAVE_DIALOG_FAILED.to_string()),
+            });
+        }
+    };
+
+    let file_path = selected_path.to_string_lossy().to_string();
+    let (file_name, working_dir) = file_name_and_working_dir(&selected_path);
+
+    match write_text_file(selected_path, req.content).await {
+        Ok(()) => {
+            info!("Dataflow file saved: {}", file_path);
+            Json(SaveDataflowFileResponse {
+                success: true,
+                cancelled: false,
+                file_path: Some(file_path),
+                file_name,
+                working_dir,
+                message: "File saved".to_string(),
+                error_code: None,
+            })
+        }
+        Err(e) => {
+            error!("Failed to save selected file: {}", e);
+            Json(SaveDataflowFileResponse {
+                success: false,
+                cancelled: false,
+                file_path: Some(file_path),
+                file_name,
+                working_dir,
+                message: e,
+                error_code: Some(ERR_FILE_WRITE_FAILED.to_string()),
+            })
+        }
+    }
+}
+
+/// 按路径写入数据流文件 API
+async fn write_dataflow_file(
+    Json(req): Json<WriteDataflowFileRequest>,
+) -> Json<SaveDataflowFileResponse> {
+    let file_path = req.file_path.trim().to_string();
+    if file_path.is_empty() {
+        return Json(SaveDataflowFileResponse {
+            success: false,
+            cancelled: false,
+            file_path: None,
+            file_name: None,
+            working_dir: None,
+            message: "File path is empty".to_string(),
+            error_code: Some(ERR_FILE_PATH_EMPTY.to_string()),
+        });
+    }
+
+    let path_buf = std::path::PathBuf::from(&file_path);
+    let (file_name, working_dir) = file_name_and_working_dir(&path_buf);
+
+    match write_text_file(path_buf, req.content).await {
+        Ok(()) => {
+            info!("Dataflow file written by path: {}", file_path);
+            Json(SaveDataflowFileResponse {
+                success: true,
+                cancelled: false,
+                file_path: Some(file_path),
+                file_name,
+                working_dir,
+                message: "File saved".to_string(),
+                error_code: None,
+            })
+        }
+        Err(e) => {
+            error!("Failed to write dataflow file by path: {}", e);
+            Json(SaveDataflowFileResponse {
+                success: false,
+                cancelled: false,
+                file_path: Some(file_path),
+                file_name,
+                working_dir,
+                message: e,
+                error_code: Some(ERR_FILE_WRITE_FAILED.to_string()),
+            })
+        }
+    }
+}
+
 /// 运行数据流 API
 fn normalize_node_template_ports(ports: Option<Vec<String>>) -> Option<Vec<String>> {
     let Some(ports) = ports else {
@@ -1503,6 +1698,25 @@ fn parse_dataflow_uuid_from_output(combined_output: &str) -> Option<String> {
     None
 }
 
+fn should_demote_start_stderr_to_info(stderr_text: &str) -> bool {
+    let lowered = stderr_text.trim().to_ascii_lowercase();
+    if lowered.is_empty() {
+        return false;
+    }
+
+    let has_start_marker =
+        lowered.contains("dataflow start triggered:") || lowered.contains("dataflow started:");
+    if !has_start_marker {
+        return false;
+    }
+
+    let has_error_marker = lowered.contains("failed")
+        || lowered.contains("error")
+        || lowered.contains("panic")
+        || lowered.contains("traceback");
+    !has_error_marker
+}
+
 fn dora_runtime_port_snapshot() -> String {
     format!(
         "coord_port_open={} control_port_open={} daemon_port_open={}",
@@ -1748,10 +1962,15 @@ async fn run_dataflow(
                     );
                 }
                 if !started.stderr.trim().is_empty() {
+                    let stderr_entry = if should_demote_start_stderr_to_info(&started.stderr) {
+                        LogEntry::stderr_info(started.stderr.clone(), Some(process_id.clone()))
+                    } else {
+                        LogEntry::stderr(started.stderr.clone(), Some(process_id.clone()))
+                    };
                     publish_log(
                         &log_tx,
                         &log_backlog,
-                        LogEntry::stderr(started.stderr.clone(), Some(process_id.clone())),
+                        stderr_entry,
                     );
                 }
 
@@ -2036,6 +2255,24 @@ mod process_cleanup_tests {
             by_raw.as_deref(),
             Some("66666666-7777-8888-9999-000000000000")
         );
+    }
+
+    #[test]
+    fn test_should_demote_start_stderr_to_info_for_success_markers() {
+        let text = "dataflow start triggered: 11111111-2222-3333-4444-555555555555\ndataflow started: 11111111-2222-3333-4444-555555555555";
+        assert!(should_demote_start_stderr_to_info(text));
+    }
+
+    #[test]
+    fn test_should_demote_start_stderr_to_info_rejects_failed_marker() {
+        let text = "dataflow start triggered: 11111111-2222-3333-4444-555555555555\ndora start failed: invalid yaml";
+        assert!(!should_demote_start_stderr_to_info(text));
+    }
+
+    #[test]
+    fn test_should_demote_start_stderr_to_info_rejects_unrelated_stderr() {
+        let text = "coordinator connection refused";
+        assert!(!should_demote_start_stderr_to_info(text));
     }
 
     #[test]
@@ -2498,6 +2735,53 @@ mod api_path_tests {
         assert!(!resp.success);
         assert_eq!(resp.file_path.as_deref(), Some(missing_path.as_str()));
         assert_eq!(resp.error_code.as_deref(), Some(ERR_FILE_READ_FAILED));
+    }
+
+    #[tokio::test]
+    async fn test_write_dataflow_file_returns_file_path_empty_error_code() {
+        let req = WriteDataflowFileRequest {
+            file_path: "   ".to_string(),
+            content: "nodes: []\n".to_string(),
+        };
+
+        let Json(resp) = write_dataflow_file(Json(req)).await;
+
+        assert!(!resp.success);
+        assert!(resp.file_path.is_none());
+        assert_eq!(resp.error_code.as_deref(), Some(ERR_FILE_PATH_EMPTY));
+    }
+
+    #[tokio::test]
+    async fn test_write_dataflow_file_writes_content_and_returns_working_dir() {
+        let output_path = std::env::temp_dir().join(format!(
+            "doramate_write_file_{}_{}.yml",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time before unix epoch")
+                .as_nanos()
+        ));
+        let output_path_str = output_path.to_string_lossy().to_string();
+        let expected_wd = output_path
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .expect("output parent directory");
+        let yaml = "nodes: []\n";
+        let req = WriteDataflowFileRequest {
+            file_path: output_path_str.clone(),
+            content: yaml.to_string(),
+        };
+
+        let Json(resp) = write_dataflow_file(Json(req)).await;
+
+        assert!(resp.success);
+        assert!(!resp.cancelled);
+        assert_eq!(resp.file_path.as_deref(), Some(output_path_str.as_str()));
+        assert_eq!(resp.working_dir.as_deref(), Some(expected_wd.as_str()));
+        assert!(resp.error_code.is_none());
+
+        let actual = std::fs::read_to_string(&output_path).expect("read written output file");
+        assert_eq!(actual, yaml);
     }
 }
 

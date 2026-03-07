@@ -886,6 +886,70 @@ fn should_remove_recent_file_on_open_recent_failure(
     matches!(error_code, Some("FILE_READ_FAILED")) || is_missing_file_message(message)
 }
 
+fn should_ignore_missing_layout_sidecar_error(message: &str, error_code: Option<&str>) -> bool {
+    matches!(error_code, Some("FILE_READ_FAILED")) && is_missing_file_message(message)
+}
+
+async fn merge_layout_sidecar_for_yaml_path(yaml_path: &str, dataflow: Dataflow) -> Dataflow {
+    if !is_probably_absolute_path(yaml_path) {
+        return dataflow;
+    }
+
+    let sidecar_path = crate::utils::layout_sidecar::sidecar_path_for_yaml_path(yaml_path);
+    match api::read_dataflow_file(&sidecar_path).await {
+        Ok(resp) => {
+            if resp.success {
+                if let Some(content) = resp.content {
+                    match crate::utils::layout_sidecar::apply_layout_sidecar_json(&dataflow, &content)
+                    {
+                        Ok(merged) => {
+                            log::info!("layout sidecar loaded: {}", sidecar_path);
+                            return merged;
+                        }
+                        Err(e) => {
+                            log::warn!("failed to parse layout sidecar {}: {}", sidecar_path, e);
+                        }
+                    }
+                } else {
+                    log::warn!("layout sidecar read succeeded but no content: {}", sidecar_path);
+                }
+            } else if should_ignore_missing_layout_sidecar_error(
+                &resp.message,
+                resp.error_code.as_deref(),
+            ) {
+                log::info!("layout sidecar not found: {}", sidecar_path);
+            } else {
+                let msg = api::friendly_error_message(resp.error_code.as_deref(), &resp.message);
+                log::warn!("layout sidecar load failed ({}): {}", sidecar_path, msg);
+            }
+        }
+        Err(e) => {
+            log::warn!("layout sidecar read unavailable ({}): {}", sidecar_path, e);
+        }
+    }
+
+    dataflow
+}
+
+async fn persist_layout_sidecar_for_yaml_path(yaml_path: &str, dataflow: &Dataflow) -> Result<(), String> {
+    if !is_probably_absolute_path(yaml_path) {
+        return Ok(());
+    }
+
+    let sidecar_path = crate::utils::layout_sidecar::sidecar_path_for_yaml_path(yaml_path);
+    let sidecar_json = crate::utils::layout_sidecar::dataflow_to_layout_sidecar_json(dataflow)?;
+    let resp = api::write_dataflow_file(&sidecar_path, &sidecar_json).await?;
+    if resp.success {
+        log::info!("layout sidecar saved: {}", sidecar_path);
+        Ok(())
+    } else {
+        Err(api::friendly_error_message(
+            resp.error_code.as_deref(),
+            &resp.message,
+        ))
+    }
+}
+
 fn sanitize_template_id(raw: &str) -> String {
     let mut out = String::new();
     for ch in raw.chars() {
@@ -2354,6 +2418,13 @@ pub fn App() -> impl IntoView {
                             if let Some(content) = resp.content.clone() {
                                 match crate::utils::file::parse_yaml_text(&content) {
                                     Ok(dataflow) => {
+                                        let dataflow = if let Some(file_path) = selected_path.as_deref()
+                                        {
+                                            merge_layout_sidecar_for_yaml_path(file_path, dataflow)
+                                                .await
+                                        } else {
+                                            dataflow
+                                        };
                                         replace_dataflow_without_history(dataflow);
                                         log::info!("opened via LocalAgent picker");
                                     }
@@ -2420,10 +2491,13 @@ pub fn App() -> impl IntoView {
                             if let Some(content) = resp.content.clone() {
                                 match crate::utils::file::parse_yaml_text(&content) {
                                     Ok(dataflow) => {
-                                        replace_dataflow_without_history(dataflow);
-
                                         let final_path =
                                             resp.file_path.clone().unwrap_or(selected_path.clone());
+                                        let dataflow =
+                                            merge_layout_sidecar_for_yaml_path(&final_path, dataflow)
+                                                .await;
+                                        replace_dataflow_without_history(dataflow);
+
                                         let final_name = resp
                                             .file_name
                                             .clone()
@@ -2473,31 +2547,105 @@ pub fn App() -> impl IntoView {
 
     let on_save = Callback::new({
         let current_file_path = current_file_path.clone();
+        let set_current_file_path = set_current_file_path.clone();
+        let working_dir = working_dir.clone();
+        let set_working_dir = set_working_dir.clone();
         let set_recent_files = set_recent_files.clone();
         let set_save_dialog_state = set_save_dialog_state.clone();
         let dataflow = dataflow.clone();
         let set_has_unsaved_changes = set_has_unsaved_changes.clone();
         move |()| {
-            if let Some(file_path) = current_file_path.get() {
-                log::info!("save via browser download: {}", file_path);
-
-                let filename = file_path
-                    .split('\\')
-                    .last()
-                    .or_else(|| file_path.split('/').last())
-                    .unwrap_or(&file_path);
-
-                crate::utils::file::save_yaml_file(&dataflow.get(), filename);
-                log::info!("file saved: {}", filename);
-                set_has_unsaved_changes.set(false);
-                if should_record_recent_file_for_open(Some(&file_path)) {
-                    add_recent_file(filename.to_string(), file_path.clone());
-                    set_recent_files.set(get_recent_files());
+            let current_dataflow = dataflow.get();
+            let yaml = match crate::utils::converter::dataflow_to_yaml(&current_dataflow) {
+                Ok(yaml) => yaml,
+                Err(e) => {
+                    log::error!("save failed: YAML convert error: {}", e);
+                    return;
                 }
-            } else {
-                log::info!("new file: open Save As dialog");
-                set_save_dialog_state.set(SaveDialogState::Open);
-            }
+            };
+
+            let current_path = current_file_path.get();
+            let save_as_mode = current_path.is_none();
+            let current_working_dir = working_dir.get();
+
+            let set_current_file_path = set_current_file_path.clone();
+            let set_working_dir = set_working_dir.clone();
+            let set_recent_files = set_recent_files.clone();
+            let set_save_dialog_state = set_save_dialog_state.clone();
+            let set_has_unsaved_changes = set_has_unsaved_changes.clone();
+
+            spawn_local(async move {
+                let save_result = if let Some(file_path) = current_path.clone() {
+                    log::info!("save via LocalAgent path: {}", file_path);
+                    api::write_dataflow_file(&file_path, &yaml).await
+                } else {
+                    log::info!("save as via LocalAgent dialog");
+                    api::save_dataflow_file(
+                        &yaml,
+                        Some("dataflow.yml"),
+                        current_working_dir.as_deref(),
+                    )
+                    .await
+                };
+
+                match save_result {
+                    Ok(resp) => {
+                        if resp.cancelled {
+                            log::info!("save file cancelled");
+                            return;
+                        }
+                        if resp.success {
+                            let final_path = resp
+                                .file_path
+                                .clone()
+                                .or(current_path.clone())
+                                .unwrap_or_else(|| "dataflow.yml".to_string());
+                            let final_name = resp
+                                .file_name
+                                .clone()
+                                .unwrap_or_else(|| file_name_from_path(&final_path));
+
+                            set_current_file_path.set(Some(final_path.clone()));
+
+                            let resolved_wd =
+                                resp.working_dir.clone().or_else(|| parent_dir_from_path(&final_path));
+                            if let Some(wd) = resolved_wd {
+                                set_working_dir.set(Some(wd.clone()));
+                                log::info!("working directory set from saved file: {}", wd);
+                            }
+
+                            if let Err(e) =
+                                persist_layout_sidecar_for_yaml_path(&final_path, &current_dataflow)
+                                    .await
+                            {
+                                log::warn!("layout sidecar save failed ({}): {}", final_path, e);
+                            }
+
+                            set_has_unsaved_changes.set(false);
+                            if should_record_recent_file_for_open(Some(&final_path)) {
+                                add_recent_file(final_name, final_path.clone());
+                                set_recent_files.set(get_recent_files());
+                            }
+                            log::info!("file saved via LocalAgent: {}", final_path);
+                        } else {
+                            let msg =
+                                api::friendly_error_message(resp.error_code.as_deref(), &resp.message);
+                            log::warn!("save failed: {}", msg);
+                            if save_as_mode {
+                                log::warn!("fallback to browser Save As dialog");
+                                set_save_dialog_state.set(SaveDialogState::Open);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!("LocalAgent save unavailable: {}", e);
+                        if save_as_mode {
+                            log::warn!("fallback to browser Save As dialog");
+                            set_save_dialog_state.set(SaveDialogState::Open);
+                        }
+                    }
+                }
+            });
         }
     });
 
@@ -3621,21 +3769,36 @@ pub fn App() -> impl IntoView {
                 />
             }}
 
-            <SaveFileDialog
-                state=save_dialog_state.into()
-                set_state=set_save_dialog_state
-                yaml_content=Signal::derive(move || {
-                    match crate::utils::converter::dataflow_to_yaml(&dataflow.get()) {
-                        Ok(yaml) => yaml,
-                        Err(e) => {
-                            log::error!("YAML convert failed: {}", e);
-                            format!("# Error: {}\n# Please check dataflow config", e)
+            {let dataflow_for_yaml = dataflow.clone();
+            let dataflow_for_sidecar = dataflow.clone();
+            view! {
+                <SaveFileDialog
+                    state=save_dialog_state.into()
+                    set_state=set_save_dialog_state
+                    yaml_content=Signal::derive(move || {
+                        match crate::utils::converter::dataflow_to_yaml(&dataflow_for_yaml.get()) {
+                            Ok(yaml) => yaml,
+                            Err(e) => {
+                                log::error!("YAML convert failed: {}", e);
+                                format!("# Error: {}\n# Please check dataflow config", e)
+                            }
                         }
-                    }
-                })
-                on_save_success=on_save_success
-                saved_files=saved_files.into()
-            />
+                    })
+                    layout_sidecar_content=Signal::derive(move || {
+                        match crate::utils::layout_sidecar::dataflow_to_layout_sidecar_json(
+                            &dataflow_for_sidecar.get(),
+                        ) {
+                            Ok(sidecar_json) => sidecar_json,
+                            Err(e) => {
+                                log::error!("layout sidecar convert failed: {}", e);
+                                String::new()
+                            }
+                        }
+                    })
+                    on_save_success=on_save_success
+                    saved_files=saved_files.into()
+                />
+            }}
 
             <ConfirmDialog
                 state=confirm_state.into()
