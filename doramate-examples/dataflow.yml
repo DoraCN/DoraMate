@@ -1,40 +1,35 @@
 nodes:
-  - id: webcam
-    build: cargo build -p webcam --release
-    path: target/release/webcam
-    env:
-      PATH: "C:\\vcpkg\\installed\\x64-windows\\bin;${PATH}"
-    inputs:
-      tick: dora/timer/millis/100
-    outputs:
-      - frame
-
-  - id: object_detection
-    build: cargo build -p object_detection --release
-    path: target/release/object_detection
-    env:
-      PATH: "C:\\vcpkg\\installed\\x64-windows\\bin;${PATH}"
-    inputs:
-      frame: webcam/frame
-    outputs:
-      - detections
-
-  - id: viewer
-    build: cargo build -p viewer --release
-    path: target/release/viewer
-    env:
-      PATH: "C:\\vcpkg\\installed\\x64-windows\\bin;${PATH}"
-    inputs:
-      detections: object_detection/detections
-      frame: webcam/frame
-
-  - id: recorder
-    build: cargo build -p recorder --release
-    path: target/release/recorder
-    env:
-      PATH: "C:\\vcpkg\\installed\\x64-windows\\bin;${PATH}"
-      RECORDER_OUTPUT: "recording.avi"
-      RECORDER_FPS: "30"
-    inputs:
-      detections: object_detection/detections
-      frame: webcam/frame
+- id: webcam
+  path: target/release/webcam
+  inputs:
+    tick: dora/timer/millis/100
+  outputs:
+  - frame
+  env:
+    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
+- id: object_detection
+  path: target/release/object_detection
+  inputs:
+    frame: webcam/frame
+  outputs:
+  - detections
+  env:
+    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
+- id: viewer
+  path: target/release/viewer
+  inputs:
+    detections: object_detection/detections
+    frame: webcam/frame
+  outputs:
+  - detections
+  env:
+    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
+- id: recorder
+  path: target/release/recorder
+  inputs:
+    detections: object_detection/detections
+    frame: webcam/frame
+  env:
+    RECORDER_FPS: '30'
+    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
+    RECORDER_OUTPUT: recording.avi

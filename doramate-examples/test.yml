@@ -1,22 +1,3 @@
-__doramate__:
-  layout:
-    recorder:
-      x: 680.0
-      y: 260.0
-      label: recorder
-    webcam:
-      x: 120.0
-      y: 120.0
-      label: webcam
-    object_detection:
-      x: 400.0
-      y: 120.0
-      label: object_detection
-    viewer:
-      x: 680.0
-      y: 120.0
-      label: viewer
-  name: My Dataflow
 nodes:
 - id: webcam
   path: target/release/webcam
@@ -37,16 +18,18 @@ nodes:
 - id: viewer
   path: target/release/viewer
   inputs:
-    detections: object_detection/detections
     frame: webcam/frame
+    detections: object_detection/detections
+  outputs:
+  - detections
   env:
     PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
 - id: recorder
   path: target/release/recorder
   inputs:
-    detections: object_detection/detections
     frame: webcam/frame
+    detections: object_detection/detections
   env:
-    RECORDER_FPS: '30'
-    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
     RECORDER_OUTPUT: recording.avi
+    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
+    RECORDER_FPS: '30'
