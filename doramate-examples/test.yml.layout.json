@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "nodes": {
+    "viewer": {
+      "x": 680.0,
+      "y": 120.0,
+      "label": "viewer",
+      "scale": 1.0
+    },
+    "webcam": {
+      "x": 120.0,
+      "y": 120.0,
+      "label": "webcam",
+      "scale": 1.0
+    },
+    "recorder": {
+      "x": 680.0,
+      "y": 260.0,
+      "label": "recorder",
+      "scale": 1.0
+    },
+    "object_detection": {
+      "x": 400.0,
+      "y": 120.0,
+      "label": "object_detection",
+      "scale": 1.0
+    }
+  }
+}
