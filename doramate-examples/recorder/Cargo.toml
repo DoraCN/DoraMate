@@ -1,10 +1,10 @@
 [package]
 name = "recorder"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-dora-node-api = "0.3.13"
+dora-node-api = "0.5.0"
 opencv = { version = "0.98.0", features = ["videoio", "imgcodecs", "imgproc"] }
 anyhow = "1.0"
 
