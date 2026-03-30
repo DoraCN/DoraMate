@@ -258,4 +258,3 @@ catch (DoraOperatorException ex) when (ex.ErrorCode == DoraOperatorErrorCode.Lif
 - 构建说明：`BUILD.md`
 - 快速开始：`QUICKSTART.md`
 - 结构说明：`PROJECT_STRUCTURE.md`
-- 迁移清单：`MIGRATION_CHECKLIST.md`
