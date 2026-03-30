@@ -1,10 +1,11 @@
 # DoraMate
 
-DoraMate 是一个面向 [Dora](https://github.com/dora-rs/dora) 数据流的本地可视化编辑与运行工具链。当前仓库主要由三个子项目组成：
+DoraMate 是一个面向 [Dora](https://github.com/dora-rs/dora) 数据流的本地可视化编辑与运行工具链。当前仓库主要由四个子项目组成：
 
 1. `doramate-frontend`：基于 Leptos + WASM 的前端可视化编辑器
 2. `doramate-localagent`：基于 Axum 的本地代理服务，负责文件操作、运行 Dora、状态与日志推送
 3. `doramate-examples`：Rust 示例数据流（摄像头采集 + 目标检测 + 可视化 + 录制）
+4. `dora-api-csharp`：Dora C# 语言绑定工作区，提供 Node / Operator SDK、样例与回归脚本
 
 ## 仓库结构
 
@@ -13,6 +14,7 @@ DoraMate/
 ├── doramate-frontend/     # 前端编辑器（Web）
 ├── doramate-localagent/   # 本地服务（HTTP + WebSocket）
 ├── doramate-examples/     # 示例数据流与节点
+├── dora-api-csharp/       # Dora C# 绑定、样例与验证脚本
 ├── docs/                  # 设计与架构文档
 └── README.md
 ```
@@ -144,6 +146,20 @@ cargo build --release
 dora start dataflow.yml
 ```
 
+### dora-api-csharp
+
+- 技术栈：.NET 8 + C# + NativeAOT + Dora C ABI
+- 主要能力：
+  - 提供 `DoraNode` 托管 API，用于编写独立 C# node
+  - 提供 `DoraOperator` 托管 API，用于编写可被 Dora runtime 加载的 NativeAOT operator
+  - 支持 bytes、UTF-8 string 和 Arrow `RecordBatch` 数据收发
+  - 提供 samples、smoke 脚本和 regression runner 验证 C# 绑定运行链路
+- 关键代码：
+  - `src/DoraNode/DoraNode.cs`：Node 生命周期、`Next()` / `NextAsync(...)`、输出发送主入口
+  - `src/DoraOperator/DoraOperatorBase.cs`：Operator 继承基类与事件处理模型
+  - `src/DoraOperator/OperatorEntrypoint.cs`：NativeAOT operator 的 init / on_event / drop 导出桥接
+  - `scripts/smoke-csharp-bindings.ps1`：统一 smoke 入口，串联 native 构建、sample 运行与回归验证
+
 ## 常见问题
 
 ### 1. 前端提示无法连接 LocalAgent
@@ -170,4 +186,5 @@ dora start dataflow.yml
 - [doramate-frontend/README.md](./doramate-frontend/README.md)
 - [doramate-localagent/README.md](./doramate-localagent/README.md)
 - [doramate-examples/README.md](./doramate-examples/README.md)
+- [dora-api-csharp/README.md](./dora-api-csharp/README.md)
 - [docs/](./docs/)
