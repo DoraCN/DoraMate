@@ -17,14 +17,12 @@ nodes:
     PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
 - id: csharp_detection_summary
   path: csharp_detection_summary/bin/Release/net8.0/CSharpDetectionSummary.exe
-  build: |
-    dotnet build csharp_detection_summary/CSharpDetectionSummary.csproj -c Release -p:NuGetAudit=false
   inputs:
     detections: object_detection/detections
   env:
-    DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+    DOTNET_CLI_TELEMETRY_OPTOUT: '1'
     DOTNET_CLI_HOME: ./.dotnet-cli
-    DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1'
 - id: viewer
   path: target/release/viewer
   inputs:
@@ -40,6 +38,6 @@ nodes:
     detections: object_detection/detections
     frame: webcam/frame
   env:
-    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
     RECORDER_OUTPUT: recording.avi
     RECORDER_FPS: '30'
+    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
