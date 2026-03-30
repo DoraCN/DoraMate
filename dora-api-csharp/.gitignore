@@ -1,0 +1,23 @@
+# .NET
+**/bin/
+**/obj/
+
+# Rust
+**/target/
+Cargo.lock
+
+# Artifacts
+artifacts/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Local env
+.env
+.env.*

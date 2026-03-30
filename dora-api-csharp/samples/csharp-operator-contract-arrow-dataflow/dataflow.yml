@@ -1,0 +1,54 @@
+nodes:
+  - id: producer
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build Producer.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/cs-op-contract-arrow/Producer/Release/net8.0/CSharpOperatorContractArrowProducer
+    inputs:
+      tick: dora/timer/millis/300
+    outputs:
+      - trigger
+
+  - id: batch-producer-runtime
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    operators:
+      - id: contract-batch-producer
+        build: |
+          dotnet publish ContractBatchProducerOperator.csproj -c Release -p:NuGetAudit=false
+        shared-library: ../../artifacts/samples/cs-op-contract-arrow/ContractBatchProducerOperator/Release/net8.0/win-x64/native/ContractBatchProducerOperator
+        inputs:
+          trigger: producer/trigger
+        outputs:
+          - batch
+
+  - id: batch-verifier-runtime
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    operators:
+      - id: contract-batch-verifier
+        build: |
+          dotnet publish ContractBatchVerifierOperator.csproj -c Release -p:NuGetAudit=false
+        shared-library: ../../artifacts/samples/cs-op-contract-arrow/ContractBatchVerifierOperator/Release/net8.0/win-x64/native/ContractBatchVerifierOperator
+        inputs:
+          batch: batch-producer-runtime/contract-batch-producer/batch
+        outputs:
+          - summary
+
+  - id: sink
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build Sink.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/cs-op-contract-arrow/Sink/Release/net8.0/CSharpOperatorContractArrowSink
+    inputs:
+      summary: batch-verifier-runtime/contract-batch-verifier/summary

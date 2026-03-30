@@ -1,0 +1,39 @@
+nodes:
+  - id: producer
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build Producer.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/csharp-operator-dataflow/Producer/Release/net8.0/CSharpOperatorProducer
+    inputs:
+      tick: dora/timer/millis/300
+    outputs:
+      - message
+
+  - id: runtime-node
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    operators:
+      - id: csharp-operator
+        build: |
+          dotnet publish CSharpCounterOperator.csproj -c Release -p:NuGetAudit=false
+        shared-library: ../../artifacts/samples/csharp-operator-dataflow/CSharpCounterOperator/Release/net8.0/win-x64/native/CSharpCounterOperator
+        inputs:
+          message: producer/message
+        outputs:
+          - counter
+
+  - id: sink
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build Sink.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/csharp-operator-dataflow/Sink/Release/net8.0/CSharpOperatorSink
+    inputs:
+      counter: runtime-node/csharp-operator/counter

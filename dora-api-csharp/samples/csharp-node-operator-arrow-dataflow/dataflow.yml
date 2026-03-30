@@ -1,0 +1,39 @@
+nodes:
+  - id: producer
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build Producer.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/csharp-node-operator-arrow-dataflow/Producer/Release/net8.0/CSharpNodeOperatorArrowProducer
+    inputs:
+      tick: dora/timer/millis/300
+    outputs:
+      - batch
+
+  - id: batch-forward-runtime
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    operators:
+      - id: recordbatch-forwarder
+        build: |
+          dotnet publish RecordBatchForwardOperator.csproj -c Release -p:NuGetAudit=false
+        shared-library: ../../artifacts/samples/csharp-node-operator-arrow-dataflow/RecordBatchForwardOperator/Release/net8.0/win-x64/native/RecordBatchForwardOperator
+        inputs:
+          batch: producer/batch
+        outputs:
+          - batch
+
+  - id: consumer
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build Consumer.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/csharp-node-operator-arrow-dataflow/Consumer/Release/net8.0/CSharpNodeOperatorArrowConsumer
+    inputs:
+      batch: batch-forward-runtime/recordbatch-forwarder/batch

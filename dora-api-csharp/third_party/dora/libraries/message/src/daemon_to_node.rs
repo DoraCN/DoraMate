@@ -1,0 +1,84 @@
+use std::{net::SocketAddr, path::PathBuf};
+
+use crate::{
+    DataflowId,
+    config::NodeRunConfig,
+    descriptor::OperatorDefinition,
+    id::{DataId, NodeId, OperatorId},
+    metadata::Metadata,
+};
+
+pub use crate::common::{DataMessage, DropToken, SharedMemoryId, Timestamped};
+
+// Passed via env variable
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct RuntimeConfig {
+    pub node: NodeConfig,
+    pub operators: Vec<OperatorDefinition>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct NodeConfig {
+    pub dataflow_id: DataflowId,
+    pub node_id: NodeId,
+    pub run_config: NodeRunConfig,
+    pub daemon_communication: Option<DaemonCommunication>,
+    pub dataflow_descriptor: serde_yaml::Value,
+    pub dynamic: bool,
+    pub write_events_to: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum DaemonCommunication {
+    Tcp {
+        socket_addr: SocketAddr,
+    },
+    #[cfg(unix)]
+    UnixDomain {
+        socket_file: PathBuf,
+    },
+    Interactive,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[must_use]
+#[allow(clippy::large_enum_variant)]
+pub enum DaemonReply {
+    Result(Result<(), String>),
+    PreparedMessage { shared_memory_id: SharedMemoryId },
+    NextEvents(Vec<Timestamped<NodeEvent>>),
+    NextDropEvents(Vec<Timestamped<NodeDropEvent>>),
+    NodeConfig { result: Result<NodeConfig, String> },
+    Empty,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[allow(clippy::large_enum_variant)]
+pub enum NodeEvent {
+    Stop,
+    Reload {
+        operator_id: Option<OperatorId>,
+    },
+    Input {
+        id: DataId,
+        metadata: Metadata,
+        data: Option<DataMessage>,
+    },
+    InputClosed {
+        id: DataId,
+    },
+    /// Notifies a node that all its inputs have been closed.
+    ///
+    /// This event is only sent to nodes that have at least one input.
+    AllInputsClosed,
+    NodeFailed {
+        affected_input_ids: Vec<DataId>,
+        error: String,
+        source_node_id: NodeId,
+    },
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum NodeDropEvent {
+    OutputDropped { drop_token: DropToken },
+}

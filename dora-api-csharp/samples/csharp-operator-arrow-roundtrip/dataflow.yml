@@ -1,0 +1,54 @@
+nodes:
+  - id: producer
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build Producer.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/csharp-operator-arrow-roundtrip/Producer/Release/net8.0/CSharpArrowRoundtripProducer
+    inputs:
+      tick: dora/timer/millis/300
+    outputs:
+      - trigger
+
+  - id: batch-producer-runtime
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    operators:
+      - id: recordbatch-producer
+        build: |
+          dotnet publish RecordBatchProducerOperator.csproj -c Release -p:NuGetAudit=false
+        shared-library: ../../artifacts/samples/csharp-operator-arrow-roundtrip/RecordBatchProducerOperator/Release/net8.0/win-x64/native/RecordBatchProducerOperator
+        inputs:
+          trigger: producer/trigger
+        outputs:
+          - batch
+
+  - id: batch-verifier-runtime
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    operators:
+      - id: recordbatch-verifier
+        build: |
+          dotnet publish RecordBatchVerifierOperator.csproj -c Release -p:NuGetAudit=false
+        shared-library: ../../artifacts/samples/csharp-operator-arrow-roundtrip/RecordBatchVerifierOperator/Release/net8.0/win-x64/native/RecordBatchVerifierOperator
+        inputs:
+          batch: batch-producer-runtime/recordbatch-producer/batch
+        outputs:
+          - summary
+
+  - id: sink
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build Sink.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/csharp-operator-arrow-roundtrip/Sink/Release/net8.0/CSharpArrowRoundtripSink
+    inputs:
+      summary: batch-verifier-runtime/recordbatch-verifier/summary

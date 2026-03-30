@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AssemblyName>CSharpNodeOperatorArrowConsumer</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DoraNode\DoraNode.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Consumer.cs" />
+    <Compile Include="RichArrowContract.cs" />
+  </ItemGroup>
+  <Choose>
+  <When Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <PropertyGroup>
+      <NativeNodeLibrary>..\..\artifacts\native\win-x64\dora_node_api_c.dll</NativeNodeLibrary>
+    </PropertyGroup>
+  </When>
+  <When Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <PropertyGroup>
+      <NativeNodeLibrary>..\..\artifacts\native\linux-x64\libdora_node_api_c.so</NativeNodeLibrary>
+    </PropertyGroup>
+  </When>
+  <When Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <PropertyGroup>
+      <NativeNodeLibrary>..\..\artifacts\native\osx-x64\libdora_node_api_c.dylib</NativeNodeLibrary>
+    </PropertyGroup>
+  </When>
+</Choose>
+  <ItemGroup Condition="'$(NativeNodeLibrary)' != '' and Exists('$(NativeNodeLibrary)')">
+  <None Include="$(NativeNodeLibrary)" CopyToOutputDirectory="PreserveNewest" />
+</ItemGroup>
+</Project>

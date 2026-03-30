@@ -1,0 +1,26 @@
+nodes:
+  - id: producer
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build Producer.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/csharp-multi-node/Producer/Release/net8.0/Producer
+    inputs:
+      tick: dora/timer/millis/500
+    outputs:
+      - data
+
+  - id: consumer
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build Consumer.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/csharp-multi-node/Consumer/Release/net8.0/Consumer
+    inputs:
+      message: producer/data
+    outputs:
+      - ack

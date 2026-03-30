@@ -4,12 +4,13 @@
 
 ## 功能概览
 
-数据流包含 4 个节点：
+数据流包含 5 个节点：
 
 1. `webcam`：采集摄像头帧并输出 JPEG 字节流
 2. `object_detection`：加载 YOLOv8 模型并输出检测结果
-3. `viewer`：显示视频画面并叠加检测框
-4. `recorder`：将叠加检测框后的画面写入视频文件
+3. `csharp_detection_summary`：使用 Dora C# 绑定读取检测结果并输出摘要日志
+4. `viewer`：显示视频画面并叠加检测框
+5. `recorder`：将叠加检测框后的画面写入视频文件
 
 ## 目录结构
 
@@ -19,6 +20,7 @@ doramate-examples/
 ├── Cargo.lock
 ├── dataflow.yml
 ├── xydataflow.yml
+├── csharp_detection_summary/
 ├── webcam/
 ├── object_detection/
 │   └── models/yolov8n.safetensors
@@ -105,10 +107,13 @@ object_detection/models/yolov8n.safetensors
 2. `object_detection`
    - 输入：`frame`
    - 输出：`detections`
-3. `viewer`
+3. `csharp_detection_summary`
+   - 输入：`detections`
+   - 输出：无（打印类别统计和最高置信度框）
+4. `viewer`
    - 输入：`frame`、`detections`
    - 输出：无
-4. `recorder`
+5. `recorder`
    - 输入：`frame`、`detections`
    - 输出：无（写文件）
 
@@ -134,4 +139,3 @@ object_detection/models/yolov8n.safetensors
 
 - 原因：用 Dora CLI 直接运行了 `xydataflow.yml`
 - 处理：改为 `dora start dataflow.yml`
-

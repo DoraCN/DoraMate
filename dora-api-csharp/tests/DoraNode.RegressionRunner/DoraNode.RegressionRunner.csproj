@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsPackable>false</IsPackable>
+    <BaseOutputPath>..\..\artifacts\dotnet\DoraNode.RegressionRunner\</BaseOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DoraNode\DoraNode.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\samples\csharp-arrow-node-dataflow\RichArrowContract.cs" Link="Fixtures\RichArrowContract.cs" />
+    <Compile Include="..\..\samples\csharp-advanced-arrow-node-dataflow\RichAdvancedArrowContract.cs" Link="Fixtures\RichAdvancedArrowContract.cs" />
+    <Compile Include="..\..\samples\csharp-complex-arrow-contract-node-dataflow\RichComplexArrowContract.cs" Link="Fixtures\RichComplexArrowContract.cs" />
+  </ItemGroup>
+</Project>

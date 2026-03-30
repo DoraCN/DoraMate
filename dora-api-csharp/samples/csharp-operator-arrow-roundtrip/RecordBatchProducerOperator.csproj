@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <PublishAot>true</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <SelfContained>true</SelfContained>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AssemblyName>RecordBatchProducerOperator</AssemblyName>
+  </PropertyGroup>
+
+  <Choose>
+    <When Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+      <PropertyGroup>
+        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+        <NativeOperatorLibrary>..\..\artifacts\native\win-x64\dora_operator_api_c.dll</NativeOperatorLibrary>
+      </PropertyGroup>
+    </When>
+    <When Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+      <PropertyGroup>
+        <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+        <NativeOperatorLibrary>..\..\artifacts\native\linux-x64\libdora_operator_api_c.so</NativeOperatorLibrary>
+      </PropertyGroup>
+    </When>
+    <When Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+      <PropertyGroup>
+        <RuntimeIdentifier>osx-x64</RuntimeIdentifier>
+        <NativeOperatorLibrary>..\..\artifacts\native\osx-x64\libdora_operator_api_c.dylib</NativeOperatorLibrary>
+      </PropertyGroup>
+    </When>
+  </Choose>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DoraOperator\DoraOperator.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="RecordBatchProducerOperator.cs" />
+    <Compile Include="RecordBatchProducerNativeExports.cs" />
+    <Compile Include="RichArrowContract.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(NativeOperatorLibrary)' != '' and Exists('$(NativeOperatorLibrary)')">
+    <None Include="$(NativeOperatorLibrary)" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

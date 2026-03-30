@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <SampleName>csharp-operator-contract-arrow-dataflow</SampleName>
+    <ArtifactSampleName>cs-op-contract-arrow</ArtifactSampleName>
+    <BaseOutputPath Condition="'$(BaseOutputPath)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\samples\$(ArtifactSampleName)\$(MSBuildProjectName)\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(BaseIntermediateOutputPath)**;$(MSBuildThisFileDirectory)obj\**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>
