@@ -687,6 +687,10 @@ fn map_node_runtime_states(status: &api::DataflowStatusResponse) -> HashMap<Stri
         .map(|detail| {
             let state = if detail.is_running {
                 NodeState::Running
+            } else if matches!(status.status, api::DataflowLifecycleStatus::Starting) {
+                NodeState::Starting
+            } else if matches!(status.status, api::DataflowLifecycleStatus::Failed) {
+                NodeState::Error(status.message.clone())
             } else {
                 NodeState::Stopped
             };
@@ -745,7 +749,7 @@ fn connect_status_stream(
                         set_error_nodes,
                         set_node_runtime_states,
                     );
-                    if matches!(status.status.as_str(), "stopped" | "not_found") {
+                    if status.status.is_terminal() {
                         set_is_running.set(false);
                     }
                 }
@@ -794,14 +798,10 @@ fn start_status_polling(
                         set_node_runtime_states,
                     );
 
-                    match status.status.as_str() {
-                        "running" => {}
-                        "stopped" | "not_found" => {
-                            log::info!("process status: {}", status.status);
-                            set_is_running.set(false);
-                            break;
-                        }
-                        _ => {}
+                    if status.status.is_terminal() {
+                        log::info!("process status: {:?}", status.status);
+                        set_is_running.set(false);
+                        break;
                     }
                 }
                 Err(_) => {
@@ -900,8 +900,9 @@ async fn merge_layout_sidecar_for_yaml_path(yaml_path: &str, dataflow: Dataflow)
         Ok(resp) => {
             if resp.success {
                 if let Some(content) = resp.content {
-                    match crate::utils::layout_sidecar::apply_layout_sidecar_json(&dataflow, &content)
-                    {
+                    match crate::utils::layout_sidecar::apply_layout_sidecar_json(
+                        &dataflow, &content,
+                    ) {
                         Ok(merged) => {
                             log::info!("layout sidecar loaded: {}", sidecar_path);
                             return merged;
@@ -911,7 +912,10 @@ async fn merge_layout_sidecar_for_yaml_path(yaml_path: &str, dataflow: Dataflow)
                         }
                     }
                 } else {
-                    log::warn!("layout sidecar read succeeded but no content: {}", sidecar_path);
+                    log::warn!(
+                        "layout sidecar read succeeded but no content: {}",
+                        sidecar_path
+                    );
                 }
             } else if should_ignore_missing_layout_sidecar_error(
                 &resp.message,
@@ -931,7 +935,10 @@ async fn merge_layout_sidecar_for_yaml_path(yaml_path: &str, dataflow: Dataflow)
     dataflow
 }
 
-async fn persist_layout_sidecar_for_yaml_path(yaml_path: &str, dataflow: &Dataflow) -> Result<(), String> {
+async fn persist_layout_sidecar_for_yaml_path(
+    yaml_path: &str,
+    dataflow: &Dataflow,
+) -> Result<(), String> {
     if !is_probably_absolute_path(yaml_path) {
         return Ok(());
     }
@@ -2418,7 +2425,8 @@ pub fn App() -> impl IntoView {
                             if let Some(content) = resp.content.clone() {
                                 match crate::utils::file::parse_yaml_text(&content) {
                                     Ok(dataflow) => {
-                                        let dataflow = if let Some(file_path) = selected_path.as_deref()
+                                        let dataflow = if let Some(file_path) =
+                                            selected_path.as_deref()
                                         {
                                             merge_layout_sidecar_for_yaml_path(file_path, dataflow)
                                                 .await
@@ -2493,9 +2501,11 @@ pub fn App() -> impl IntoView {
                                     Ok(dataflow) => {
                                         let final_path =
                                             resp.file_path.clone().unwrap_or(selected_path.clone());
-                                        let dataflow =
-                                            merge_layout_sidecar_for_yaml_path(&final_path, dataflow)
-                                                .await;
+                                        let dataflow = merge_layout_sidecar_for_yaml_path(
+                                            &final_path,
+                                            dataflow,
+                                        )
+                                        .await;
                                         replace_dataflow_without_history(dataflow);
 
                                         let final_name = resp
@@ -2607,8 +2617,10 @@ pub fn App() -> impl IntoView {
 
                             set_current_file_path.set(Some(final_path.clone()));
 
-                            let resolved_wd =
-                                resp.working_dir.clone().or_else(|| parent_dir_from_path(&final_path));
+                            let resolved_wd = resp
+                                .working_dir
+                                .clone()
+                                .or_else(|| parent_dir_from_path(&final_path));
                             if let Some(wd) = resolved_wd {
                                 set_working_dir.set(Some(wd.clone()));
                                 log::info!("working directory set from saved file: {}", wd);
@@ -2628,8 +2640,10 @@ pub fn App() -> impl IntoView {
                             }
                             log::info!("file saved via LocalAgent: {}", final_path);
                         } else {
-                            let msg =
-                                api::friendly_error_message(resp.error_code.as_deref(), &resp.message);
+                            let msg = api::friendly_error_message(
+                                resp.error_code.as_deref(),
+                                &resp.message,
+                            );
                             log::warn!("save failed: {}", msg);
                             if save_as_mode {
                                 log::warn!("fallback to browser Save As dialog");
@@ -2919,15 +2933,10 @@ pub fn App() -> impl IntoView {
                                 &response.message,
                             );
                             match api::get_dataflow_status(&process_id).await {
-                                Ok(status)
-                                    if matches!(
-                                        status.status.as_str(),
-                                        "stopped" | "not_found"
-                                    ) =>
-                                {
+                                Ok(status) if status.status.indicates_stopped() => {
                                     log::warn!(
                                         "stop returned failure but process already {}: {}",
-                                        status.status,
+                                        format!("{:?}", status.status),
                                         stop_message
                                     );
                                     apply_stopped_state();
@@ -2935,7 +2944,7 @@ pub fn App() -> impl IntoView {
                                 }
                                 Ok(status) => {
                                     log::error!(
-                                        "stop failed: {} (current status: {})",
+                                        "stop failed: {} (current status: {:?})",
                                         stop_message,
                                         status.status
                                     );
@@ -2951,10 +2960,10 @@ pub fn App() -> impl IntoView {
                         }
                     }
                     Err(e) => match api::get_dataflow_status(&process_id).await {
-                        Ok(status) if matches!(status.status.as_str(), "stopped" | "not_found") => {
+                        Ok(status) if status.status.indicates_stopped() => {
                             log::warn!(
                                 "stop API call failed but process already {}: {}",
-                                status.status,
+                                format!("{:?}", status.status),
                                 e
                             );
                             apply_stopped_state();
@@ -2962,7 +2971,7 @@ pub fn App() -> impl IntoView {
                         }
                         Ok(status) => {
                             log::error!(
-                                "API call failed: {} (current status: {})",
+                                "API call failed: {} (current status: {:?})",
                                 e,
                                 status.status
                             );

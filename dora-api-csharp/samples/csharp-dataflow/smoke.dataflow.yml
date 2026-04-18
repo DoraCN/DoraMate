@@ -1,0 +1,11 @@
+nodes:
+  - id: csharp-node
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    path: ../../artifacts/samples/csharp-dataflow/CSharpNode/Release/net8.0/CSharpNode
+    inputs:
+      tick: dora/timer/millis/100
+    outputs:
+      - output

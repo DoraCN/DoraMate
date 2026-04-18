@@ -8,7 +8,7 @@ use axum::{
     Json, Router,
 };
 use futures_util::{SinkExt, StreamExt};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_yaml::Value;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::{SocketAddr, TcpStream};
@@ -42,10 +42,18 @@ const ERR_DORA_START_WAIT_FAILED: &str = "DORA_START_WAIT_FAILED";
 const ERR_DORA_START_TIMEOUT: &str = "DORA_START_TIMEOUT";
 const ERR_DORA_START_FAILED: &str = "DORA_START_FAILED";
 const ERR_DORA_START_SPAWN_FAILED: &str = "DORA_START_SPAWN_FAILED";
+const ERR_START_CONFIRMATION_FAILED: &str = "START_CONFIRMATION_FAILED";
 const ERR_STOP_PARTIAL_FAILURE: &str = "STOP_PARTIAL_FAILURE";
+const ERR_STOP_TIMEOUT: &str = "STOP_TIMEOUT";
+const ERR_STOP_CONFIRMATION_FAILED: &str = "STOP_CONFIRMATION_FAILED";
 const DORA_START_TIMEOUT_SECS: u64 = 20;
 const DORA_START_MAX_ATTEMPTS: usize = 2;
 const DORA_START_RETRY_DELAY_MS: u64 = 800;
+const STARTING_STATUS_GRACE_SECS: u64 = 5;
+const START_CONFIRMATION_TIMEOUT_MS: u64 = 3_000;
+const START_CONFIRMATION_POLL_INTERVAL_MS: u64 = 250;
+const STOP_CONFIRMATION_TIMEOUT_MS: u64 = 3_000;
+const STOP_CONFIRMATION_POLL_INTERVAL_MS: u64 = 250;
 
 /// 从 DoraMate YAML 中提取纯净的 DORA YAML（移除 __doramate__ 元数据）
 fn extract_clean_dora_yaml(yaml: &str) -> String {
@@ -158,16 +166,33 @@ struct TestBehavior {
     force_dora_installed: Option<bool>,
     force_runtime_ready_error: Option<String>,
     force_run_outcome: Option<ForcedRunOutcome>,
+    force_run_confirmation_outcome: Option<ForcedRunConfirmationOutcome>,
     force_stop_error: Option<String>,
+    force_stop_confirmation_outcome: Option<ForcedStopConfirmationOutcome>,
 }
 
 #[cfg(test)]
 #[derive(Clone, Debug)]
 enum ForcedRunOutcome {
+    StartSucceeded(Option<String>),
     StartWaitFailed(String),
     StartTimeout,
     StartFailed(String),
     StartSpawnFailed(String),
+}
+
+#[cfg(test)]
+#[derive(Clone, Debug)]
+enum ForcedRunConfirmationOutcome {
+    Timeout,
+    ProbeFailed(String),
+}
+
+#[cfg(test)]
+#[derive(Clone, Debug)]
+enum ForcedStopConfirmationOutcome {
+    Timeout(Vec<String>),
+    ProbeFailed(String),
 }
 
 #[cfg(test)]
@@ -200,6 +225,16 @@ fn get_forced_run_outcome(state: &AppState) -> Option<ForcedRunOutcome> {
 }
 
 #[cfg(test)]
+fn get_forced_run_confirmation_outcome(state: &AppState) -> Option<ForcedRunConfirmationOutcome> {
+    state
+        .test_behavior
+        .lock()
+        .expect("lock test behavior")
+        .force_run_confirmation_outcome
+        .clone()
+}
+
+#[cfg(test)]
 fn get_forced_stop_error(state: &AppState) -> Option<String> {
     state
         .test_behavior
@@ -207,6 +242,215 @@ fn get_forced_stop_error(state: &AppState) -> Option<String> {
         .expect("lock test behavior")
         .force_stop_error
         .clone()
+}
+
+#[cfg(test)]
+fn get_forced_stop_confirmation_outcome(state: &AppState) -> Option<ForcedStopConfirmationOutcome> {
+    state
+        .test_behavior
+        .lock()
+        .expect("lock test behavior")
+        .force_stop_confirmation_outcome
+        .clone()
+}
+
+fn now_rfc3339() -> String {
+    chrono::Utc::now().to_rfc3339()
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "PascalCase")]
+pub enum DataflowLifecycleStatus {
+    Idle,
+    Starting,
+    Running,
+    Stopping,
+    Stopped,
+    Failed,
+    Unknown,
+}
+
+impl DataflowLifecycleStatus {
+    fn contract_name(self) -> &'static str {
+        match self {
+            DataflowLifecycleStatus::Idle => "Idle",
+            DataflowLifecycleStatus::Starting => "Starting",
+            DataflowLifecycleStatus::Running => "Running",
+            DataflowLifecycleStatus::Stopping => "Stopping",
+            DataflowLifecycleStatus::Stopped => "Stopped",
+            DataflowLifecycleStatus::Failed => "Failed",
+            DataflowLifecycleStatus::Unknown => "Unknown",
+        }
+    }
+
+    fn is_terminal(self) -> bool {
+        matches!(
+            self,
+            DataflowLifecycleStatus::Idle
+                | DataflowLifecycleStatus::Stopped
+                | DataflowLifecycleStatus::Failed
+                | DataflowLifecycleStatus::Unknown
+        )
+    }
+
+    fn is_stop_candidate(self) -> bool {
+        matches!(
+            self,
+            DataflowLifecycleStatus::Starting
+                | DataflowLifecycleStatus::Running
+                | DataflowLifecycleStatus::Stopping
+        )
+    }
+}
+
+impl Serialize for DataflowLifecycleStatus {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.contract_name())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DataflowStatusSource {
+    Registry,
+    ProcessScan,
+    RegistryAndProcessScan,
+}
+
+#[derive(Clone, Debug)]
+struct RuntimeRegistryState {
+    status: DataflowLifecycleStatus,
+    message: String,
+    source: DataflowStatusSource,
+    stale: bool,
+    last_updated_at: String,
+    last_probe_attempt_at: Option<String>,
+    last_probe_success_at: Option<String>,
+    consecutive_probe_failures: u32,
+    total_nodes: usize,
+    running_nodes: usize,
+    error_nodes: usize,
+    node_details: Vec<NodeDetail>,
+}
+
+impl RuntimeRegistryState {
+    fn new(status: DataflowLifecycleStatus, message: impl Into<String>) -> Self {
+        Self {
+            status,
+            message: message.into(),
+            source: DataflowStatusSource::Registry,
+            stale: false,
+            last_updated_at: now_rfc3339(),
+            last_probe_attempt_at: None,
+            last_probe_success_at: None,
+            consecutive_probe_failures: 0,
+            total_nodes: 0,
+            running_nodes: 0,
+            error_nodes: 0,
+            node_details: vec![],
+        }
+    }
+
+    fn to_response(&self, process_id: &str, uptime_seconds: u64) -> DataflowStatusResponse {
+        DataflowStatusResponse {
+            process_id: process_id.to_string(),
+            status: self.status,
+            uptime_seconds,
+            total_nodes: self.total_nodes,
+            running_nodes: self.running_nodes,
+            error_nodes: self.error_nodes,
+            node_details: self.node_details.clone(),
+            last_updated_at: self.last_updated_at.clone(),
+            source: self.source,
+            stale: self.stale,
+            message: self.message.clone(),
+        }
+    }
+
+    fn apply_status_transition(
+        &mut self,
+        status: DataflowLifecycleStatus,
+        message: impl Into<String>,
+        source: DataflowStatusSource,
+        stale: bool,
+    ) {
+        self.status = status;
+        self.message = message.into();
+        self.source = source;
+        self.stale = stale;
+        self.last_updated_at = now_rfc3339();
+    }
+
+    fn clear_probe_snapshot(&mut self) {
+        self.total_nodes = 0;
+        self.running_nodes = 0;
+        self.error_nodes = 0;
+        self.node_details.clear();
+    }
+
+    fn record_probe_success(
+        &mut self,
+        status: DataflowLifecycleStatus,
+        message: impl Into<String>,
+        total_nodes: usize,
+        running_nodes: usize,
+        error_nodes: usize,
+        node_details: Vec<NodeDetail>,
+        stale: bool,
+    ) {
+        let now = now_rfc3339();
+        self.status = status;
+        self.message = message.into();
+        self.source = DataflowStatusSource::RegistryAndProcessScan;
+        self.stale = stale;
+        self.last_updated_at = now.clone();
+        self.last_probe_attempt_at = Some(now.clone());
+        self.last_probe_success_at = Some(now);
+        self.consecutive_probe_failures = 0;
+        self.total_nodes = total_nodes;
+        self.running_nodes = running_nodes;
+        self.error_nodes = error_nodes;
+        self.node_details = node_details;
+    }
+
+    fn record_probe_failure(&mut self, message: impl Into<String>) {
+        let message = message.into();
+        let now = now_rfc3339();
+        self.last_probe_attempt_at = Some(now.clone());
+        self.last_updated_at = now;
+        self.consecutive_probe_failures += 1;
+        self.source = DataflowStatusSource::Registry;
+        self.stale = true;
+
+        if matches!(self.status, DataflowLifecycleStatus::Idle) {
+            self.status = DataflowLifecycleStatus::Unknown;
+        }
+
+        self.message =
+            if self.total_nodes > 0 || self.running_nodes > 0 || !self.node_details.is_empty() {
+                format!("{} Using last known registry snapshot.", message)
+            } else {
+                self.clear_probe_snapshot();
+                if matches!(self.status, DataflowLifecycleStatus::Failed) {
+                    message
+                } else {
+                    self.status = DataflowLifecycleStatus::Unknown;
+                    message
+                }
+            };
+    }
+}
+
+#[derive(Clone, Debug)]
+struct NodeProbeSnapshot {
+    total_nodes: usize,
+    running_nodes: usize,
+    error_nodes: usize,
+    node_details: Vec<NodeDetail>,
+    running_node_ids: Vec<String>,
 }
 
 /// 日志条目
@@ -374,6 +618,7 @@ struct DoraProcess {
     dataflow_uuid: Option<String>,
     log_tx: broadcast::Sender<LogEntry>,
     log_backlog: Arc<Mutex<VecDeque<LogEntry>>>,
+    runtime_state: RuntimeRegistryState,
 }
 
 fn publish_log(
@@ -393,6 +638,400 @@ fn publish_log(
     }
 
     let _ = log_tx.send(entry);
+}
+
+fn update_process_status(
+    state: &Arc<AppState>,
+    process_id: &str,
+    status: DataflowLifecycleStatus,
+    message: impl Into<String>,
+) {
+    if let Some(process) = state.processes.lock().unwrap().get_mut(process_id) {
+        process.runtime_state.apply_status_transition(
+            status,
+            message,
+            DataflowStatusSource::Registry,
+            matches!(
+                status,
+                DataflowLifecycleStatus::Failed | DataflowLifecycleStatus::Unknown
+            ),
+        );
+        if matches!(
+            status,
+            DataflowLifecycleStatus::Stopped | DataflowLifecycleStatus::Idle
+        ) {
+            process.runtime_state.clear_probe_snapshot();
+        }
+    }
+}
+
+fn update_process_runtime_state(
+    state: &Arc<AppState>,
+    process_id: &str,
+    update: impl FnOnce(&mut RuntimeRegistryState),
+) {
+    if let Some(process) = state.processes.lock().unwrap().get_mut(process_id) {
+        update(&mut process.runtime_state);
+    }
+}
+
+fn derive_status_from_probe(
+    runtime_state: &RuntimeRegistryState,
+    uptime: u64,
+    probe: &NodeProbeSnapshot,
+) -> (DataflowLifecycleStatus, bool, String) {
+    if matches!(runtime_state.status, DataflowLifecycleStatus::Failed) {
+        (
+            DataflowLifecycleStatus::Failed,
+            true,
+            runtime_state.message.clone(),
+        )
+    } else if matches!(runtime_state.status, DataflowLifecycleStatus::Stopping) {
+        if probe.running_nodes > 0 {
+            (
+                DataflowLifecycleStatus::Stopping,
+                false,
+                format!(
+                    "Stop request accepted; waiting for {} running node(s) to exit.",
+                    probe.running_nodes
+                ),
+            )
+        } else {
+            (
+                DataflowLifecycleStatus::Stopped,
+                false,
+                "No running nodes detected after stop.".to_string(),
+            )
+        }
+    } else if probe.running_nodes > 0 {
+        (
+            DataflowLifecycleStatus::Running,
+            false,
+            format!("Detected {} running node(s).", probe.running_nodes),
+        )
+    } else if matches!(runtime_state.status, DataflowLifecycleStatus::Starting)
+        && uptime <= STARTING_STATUS_GRACE_SECS
+    {
+        (
+            DataflowLifecycleStatus::Starting,
+            false,
+            "Run accepted; waiting for node processes to report running state.".to_string(),
+        )
+    } else if probe.total_nodes == 0 {
+        (
+            DataflowLifecycleStatus::Unknown,
+            true,
+            "No nodes were found in the dataflow YAML during status probe.".to_string(),
+        )
+    } else {
+        (
+            DataflowLifecycleStatus::Stopped,
+            false,
+            "No running node process detected during status probe.".to_string(),
+        )
+    }
+}
+
+async fn confirm_run_startup(
+    state: &Arc<AppState>,
+    process_id: &str,
+    yaml_path: &str,
+) -> Result<String, (&'static str, String)> {
+    #[cfg(test)]
+    if let Some(forced_outcome) = get_forced_run_confirmation_outcome(state) {
+        return match forced_outcome {
+            ForcedRunConfirmationOutcome::Timeout => {
+                let diagnostics = format!(
+                    "Start confirmation failed after {}ms. dora start returned successfully, but no node processes entered running state. runtime_snapshot={}",
+                    START_CONFIRMATION_TIMEOUT_MS,
+                    dora_runtime_port_snapshot()
+                );
+                update_process_status(
+                    state,
+                    process_id,
+                    DataflowLifecycleStatus::Failed,
+                    diagnostics.clone(),
+                );
+                Err((ERR_START_CONFIRMATION_FAILED, diagnostics))
+            }
+            ForcedRunConfirmationOutcome::ProbeFailed(err) => {
+                let diagnostics = format!("Start confirmation probe failed: {}", err);
+                update_process_status(
+                    state,
+                    process_id,
+                    DataflowLifecycleStatus::Failed,
+                    diagnostics.clone(),
+                );
+                Err((ERR_START_CONFIRMATION_FAILED, diagnostics))
+            }
+        };
+    }
+
+    let deadline = std::time::Instant::now() + Duration::from_millis(START_CONFIRMATION_TIMEOUT_MS);
+    let mut last_probe_error: Option<String> = None;
+
+    loop {
+        match probe_dataflow_nodes(yaml_path) {
+            Ok(probe) => {
+                let (status, stale, message) = if probe.running_nodes > 0 {
+                    (
+                        DataflowLifecycleStatus::Running,
+                        false,
+                        format!(
+                            "Start confirmed with {} running node(s).",
+                            probe.running_nodes
+                        ),
+                    )
+                } else {
+                    (
+                        DataflowLifecycleStatus::Starting,
+                        false,
+                        "Run accepted; waiting for node processes to report running state."
+                            .to_string(),
+                    )
+                };
+
+                update_process_runtime_state(state, process_id, |registry_state| {
+                    registry_state.record_probe_success(
+                        status,
+                        message.clone(),
+                        probe.total_nodes,
+                        probe.running_nodes,
+                        probe.error_nodes,
+                        probe.node_details.clone(),
+                        stale,
+                    );
+                });
+
+                if probe.running_nodes > 0 {
+                    return Ok(message);
+                }
+            }
+            Err(err) => {
+                let err_message = format!("Start confirmation probe failed: {}", err);
+                update_process_runtime_state(state, process_id, |registry_state| {
+                    registry_state.record_probe_failure(err_message.clone());
+                });
+                last_probe_error = Some(err_message);
+            }
+        }
+
+        if std::time::Instant::now() >= deadline {
+            break;
+        }
+
+        tokio::time::sleep(Duration::from_millis(START_CONFIRMATION_POLL_INTERVAL_MS)).await;
+    }
+
+    match probe_dataflow_nodes(yaml_path) {
+        Ok(probe) if probe.running_nodes > 0 => {
+            let message = format!(
+                "Start confirmed late with {} running node(s).",
+                probe.running_nodes
+            );
+            update_process_runtime_state(state, process_id, |registry_state| {
+                registry_state.record_probe_success(
+                    DataflowLifecycleStatus::Running,
+                    message.clone(),
+                    probe.total_nodes,
+                    probe.running_nodes,
+                    probe.error_nodes,
+                    probe.node_details.clone(),
+                    false,
+                );
+            });
+            Ok(message)
+        }
+        Ok(probe) => {
+            let diagnostics = format!(
+                "Start confirmation failed after {}ms. dora start returned successfully, but no node processes entered running state. runtime_snapshot={}",
+                START_CONFIRMATION_TIMEOUT_MS,
+                dora_runtime_port_snapshot()
+            );
+            update_process_runtime_state(state, process_id, |registry_state| {
+                registry_state.record_probe_success(
+                    DataflowLifecycleStatus::Failed,
+                    diagnostics.clone(),
+                    probe.total_nodes,
+                    probe.running_nodes,
+                    probe.error_nodes,
+                    probe.node_details.clone(),
+                    true,
+                );
+            });
+            Err((ERR_START_CONFIRMATION_FAILED, diagnostics))
+        }
+        Err(err) => {
+            let diagnostics = last_probe_error.unwrap_or_else(|| {
+                format!(
+                    "Start confirmation probe failed within {}ms confirmation window: {}. runtime_snapshot={}",
+                    START_CONFIRMATION_TIMEOUT_MS,
+                    err,
+                    dora_runtime_port_snapshot()
+                )
+            });
+            update_process_runtime_state(state, process_id, |registry_state| {
+                registry_state.record_probe_failure(diagnostics.clone());
+                registry_state.status = DataflowLifecycleStatus::Failed;
+            });
+            Err((ERR_START_CONFIRMATION_FAILED, diagnostics))
+        }
+    }
+}
+
+async fn confirm_stop_completion(
+    state: &Arc<AppState>,
+    process_id: &str,
+    yaml_path: &str,
+) -> Result<String, (&'static str, String)> {
+    #[cfg(test)]
+    if let Some(forced_outcome) = get_forced_stop_confirmation_outcome(state) {
+        return match forced_outcome {
+            ForcedStopConfirmationOutcome::Timeout(running_nodes) => Err((
+                ERR_STOP_TIMEOUT,
+                format!(
+                    "Stop confirmation timed out after {}ms. Residual nodes: {}. runtime_snapshot={}",
+                    STOP_CONFIRMATION_TIMEOUT_MS,
+                    running_nodes.join(", "),
+                    dora_runtime_port_snapshot()
+                ),
+            )),
+            ForcedStopConfirmationOutcome::ProbeFailed(err) => Err((
+                ERR_STOP_CONFIRMATION_FAILED,
+                format!("Stop confirmation probe failed: {}", err),
+            )),
+        };
+    }
+
+    let deadline = std::time::Instant::now() + Duration::from_millis(STOP_CONFIRMATION_TIMEOUT_MS);
+    let mut last_running_nodes = Vec::new();
+    let mut last_probe_error: Option<String> = None;
+
+    loop {
+        match probe_dataflow_nodes(yaml_path) {
+            Ok(probe) => {
+                let message = if probe.running_nodes > 0 {
+                    format!(
+                        "Stop request accepted; waiting for {} running node(s) to exit.",
+                        probe.running_nodes
+                    )
+                } else {
+                    "No running nodes detected after stop.".to_string()
+                };
+
+                update_process_runtime_state(state, process_id, |registry_state| {
+                    registry_state.record_probe_success(
+                        if probe.running_nodes > 0 {
+                            DataflowLifecycleStatus::Stopping
+                        } else {
+                            DataflowLifecycleStatus::Stopped
+                        },
+                        message.clone(),
+                        probe.total_nodes,
+                        probe.running_nodes,
+                        probe.error_nodes,
+                        probe.node_details.clone(),
+                        false,
+                    );
+                });
+
+                if probe.running_nodes == 0 {
+                    return Ok(message);
+                }
+
+                last_running_nodes = probe.running_node_ids;
+            }
+            Err(err) => {
+                let err_message = format!("Stop confirmation probe failed: {}", err);
+                update_process_runtime_state(state, process_id, |registry_state| {
+                    registry_state.record_probe_failure(err_message.clone());
+                });
+                last_probe_error = Some(err_message);
+            }
+        }
+
+        if std::time::Instant::now() >= deadline {
+            break;
+        }
+
+        tokio::time::sleep(Duration::from_millis(STOP_CONFIRMATION_POLL_INTERVAL_MS)).await;
+    }
+
+    let killed_processes = cleanup_stale_node_processes(yaml_path);
+    if !killed_processes.is_empty() {
+        info!(
+            "stop.cleanup_after_timeout process_id={} killed_processes={:?}",
+            process_id, killed_processes
+        );
+    }
+
+    match probe_dataflow_nodes(yaml_path) {
+        Ok(probe) if probe.running_nodes == 0 => {
+            let message = if killed_processes.is_empty() {
+                "Stop confirmed after final verification.".to_string()
+            } else {
+                format!(
+                    "Stop confirmed after cleanup. Killed stale processes: {}.",
+                    killed_processes.join(", ")
+                )
+            };
+            update_process_runtime_state(state, process_id, |registry_state| {
+                registry_state.record_probe_success(
+                    DataflowLifecycleStatus::Stopped,
+                    message.clone(),
+                    probe.total_nodes,
+                    probe.running_nodes,
+                    probe.error_nodes,
+                    probe.node_details.clone(),
+                    false,
+                );
+            });
+            Ok(message)
+        }
+        Ok(probe) => {
+            let residual_nodes = if probe.running_node_ids.is_empty() {
+                last_running_nodes
+            } else {
+                probe.running_node_ids
+            };
+            let diagnostics = format!(
+                "Stop confirmation timed out after {}ms. Residual nodes: {}. runtime_snapshot={}",
+                STOP_CONFIRMATION_TIMEOUT_MS,
+                if residual_nodes.is_empty() {
+                    "unknown".to_string()
+                } else {
+                    residual_nodes.join(", ")
+                },
+                dora_runtime_port_snapshot()
+            );
+            update_process_runtime_state(state, process_id, |registry_state| {
+                registry_state.record_probe_success(
+                    DataflowLifecycleStatus::Failed,
+                    diagnostics.clone(),
+                    probe.total_nodes,
+                    probe.running_nodes,
+                    probe.error_nodes,
+                    probe.node_details.clone(),
+                    true,
+                );
+            });
+            Err((ERR_STOP_TIMEOUT, diagnostics))
+        }
+        Err(err) => {
+            let diagnostics = last_probe_error.unwrap_or_else(|| {
+                format!(
+                    "Stop confirmation probe failed after cleanup: {}. runtime_snapshot={}",
+                    err,
+                    dora_runtime_port_snapshot()
+                )
+            });
+            update_process_runtime_state(state, process_id, |registry_state| {
+                registry_state.record_probe_failure(diagnostics.clone());
+                registry_state.status = DataflowLifecycleStatus::Failed;
+            });
+            Err((ERR_STOP_CONFIRMATION_FAILED, diagnostics))
+        }
+    }
 }
 
 /// 运行数据流请求
@@ -532,12 +1171,16 @@ pub struct NodeTemplatesConfigResponse {
 #[derive(Serialize)]
 pub struct DataflowStatusResponse {
     pub process_id: String,
-    pub status: String,
+    pub status: DataflowLifecycleStatus,
     pub uptime_seconds: u64,
     pub total_nodes: usize,
     pub running_nodes: usize,
     pub error_nodes: usize,
     pub node_details: Vec<NodeDetail>,
+    pub last_updated_at: String,
+    pub source: DataflowStatusSource,
+    pub stale: bool,
+    pub message: String,
 }
 
 /// 节点详细信息
@@ -586,13 +1229,13 @@ async fn handle_status_stream_websocket(
             ticker.tick().await;
             let status = build_dataflow_status_response(&state_for_send, &process_id_for_send);
             let payload = serde_json::to_string(&status).unwrap_or_else(|_| {
-                "{\"process_id\":\"\",\"status\":\"error\",\"uptime_seconds\":0,\"total_nodes\":0,\"running_nodes\":0,\"error_nodes\":0,\"node_details\":[]}".to_string()
+                "{\"process_id\":\"\",\"status\":\"Unknown\",\"uptime_seconds\":0,\"total_nodes\":0,\"running_nodes\":0,\"error_nodes\":0,\"node_details\":[],\"last_updated_at\":\"\",\"source\":\"registry\",\"stale\":true,\"message\":\"failed to serialize status payload\"}".to_string()
             });
 
             if sender.send(Message::Text(payload)).await.is_err() {
                 break;
             }
-            if matches!(status.status.as_str(), "stopped" | "not_found") {
+            if status.status.is_terminal() {
                 break;
             }
         }
@@ -952,26 +1595,21 @@ fn cleanup_stale_node_processes(yaml_path: &str) -> Vec<String> {
     killed
 }
 
-/// 检查所有节点的状态
-fn check_all_nodes_status(yaml_path: &str) -> (usize, usize, usize, Vec<NodeDetail>) {
-    let nodes = match parse_yaml_nodes(yaml_path) {
-        Ok(n) => n,
-        Err(e) => {
-            error!("Failed to parse YAML: {}", e);
-            return (0, 0, 0, vec![]);
-        }
-    };
+fn probe_dataflow_nodes(yaml_path: &str) -> Result<NodeProbeSnapshot, String> {
+    let nodes = parse_yaml_nodes(yaml_path).map_err(|e| format!("Failed to parse YAML: {}", e))?;
 
     let total_nodes = nodes.len();
     let mut running_nodes = 0;
     let mut error_nodes = 0;
     let mut node_details = Vec::new();
+    let mut running_node_ids = Vec::new();
 
     for node in nodes {
         let is_running = check_node_process(&node);
 
         if is_running {
             running_nodes += 1;
+            running_node_ids.push(node.id.clone());
         } else {
             error_nodes += 1;
         }
@@ -992,7 +1630,13 @@ fn check_all_nodes_status(yaml_path: &str) -> (usize, usize, usize, Vec<NodeDeta
 
     info!("Total: {}/{}/{}", running_nodes, total_nodes, error_nodes);
 
-    (total_nodes, running_nodes, error_nodes, node_details)
+    Ok(NodeProbeSnapshot {
+        total_nodes,
+        running_nodes,
+        error_nodes,
+        node_details,
+        running_node_ids,
+    })
 }
 
 /// 健康检查 API
@@ -1234,8 +1878,12 @@ async fn read_dataflow_file(
 }
 
 fn file_name_and_working_dir(path: &std::path::Path) -> (Option<String>, Option<String>) {
-    let file_name = path.file_name().map(|name| name.to_string_lossy().to_string());
-    let working_dir = path.parent().map(|parent| parent.to_string_lossy().to_string());
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string());
+    let working_dir = path
+        .parent()
+        .map(|parent| parent.to_string_lossy().to_string());
     (file_name, working_dir)
 }
 
@@ -1904,6 +2552,42 @@ async fn run_dataflow(
     #[cfg(test)]
     if let Some(forced_outcome) = forced_run_outcome {
         let resp = match forced_outcome {
+            ForcedRunOutcome::StartSucceeded(dataflow_uuid) => {
+                let (log_tx, _log_rx) = broadcast::channel::<LogEntry>(100);
+                let log_backlog = Arc::new(Mutex::new(VecDeque::<LogEntry>::new()));
+                let dora_process = DoraProcess {
+                    _id: process_id.clone(),
+                    yaml_path: yaml_path_str.clone(),
+                    started_at: std::time::Instant::now(),
+                    dataflow_uuid,
+                    log_tx,
+                    log_backlog,
+                    runtime_state: RuntimeRegistryState::new(
+                        DataflowLifecycleStatus::Starting,
+                        "Run accepted; waiting for node processes to report running state.",
+                    ),
+                };
+                state
+                    .processes
+                    .lock()
+                    .unwrap()
+                    .insert(process_id.clone(), dora_process);
+
+                match confirm_run_startup(&state, &process_id, &yaml_path_str).await {
+                    Ok(message) => RunDataflowResponse {
+                        success: true,
+                        message,
+                        process_id: Some(process_id),
+                        error_code: None,
+                    },
+                    Err((error_code, message)) => RunDataflowResponse {
+                        success: false,
+                        message,
+                        process_id: Some(process_id),
+                        error_code: Some(error_code.to_string()),
+                    },
+                }
+            }
             ForcedRunOutcome::StartWaitFailed(err) => RunDataflowResponse {
                 success: false,
                 message: format!("Failed to wait for dora start: {}", err),
@@ -1967,11 +2651,7 @@ async fn run_dataflow(
                     } else {
                         LogEntry::stderr(started.stderr.clone(), Some(process_id.clone()))
                     };
-                    publish_log(
-                        &log_tx,
-                        &log_backlog,
-                        stderr_entry,
-                    );
+                    publish_log(&log_tx, &log_backlog, stderr_entry);
                 }
 
                 let dora_process = DoraProcess {
@@ -1981,6 +2661,10 @@ async fn run_dataflow(
                     dataflow_uuid: started.dataflow_uuid.clone(),
                     log_tx,
                     log_backlog,
+                    runtime_state: RuntimeRegistryState::new(
+                        DataflowLifecycleStatus::Starting,
+                        "Run accepted; waiting for node processes to report running state.",
+                    ),
                 };
 
                 state
@@ -1999,15 +2683,35 @@ async fn run_dataflow(
                     DORA_START_MAX_ATTEMPTS
                 );
 
-                return Json(RunDataflowResponse {
-                    success: true,
-                    message: format!(
-                        "Dataflow started successfully (UUID: {:?})",
-                        started.dataflow_uuid
-                    ),
-                    process_id: Some(process_id),
-                    error_code: None,
-                });
+                match confirm_run_startup(&state, &process_id, &yaml_path_str).await {
+                    Ok(message) => {
+                        return Json(RunDataflowResponse {
+                            success: true,
+                            message: if started.dataflow_uuid.is_some() {
+                                format!(
+                                    "Dataflow started successfully (UUID: {:?}). {}",
+                                    started.dataflow_uuid, message
+                                )
+                            } else {
+                                message
+                            },
+                            process_id: Some(process_id),
+                            error_code: None,
+                        });
+                    }
+                    Err((error_code, message)) => {
+                        error!(
+                            "run.start_confirmation_failed process_id={} code={} message={}",
+                            process_id, error_code, message
+                        );
+                        return Json(RunDataflowResponse {
+                            success: false,
+                            message,
+                            process_id: Some(process_id),
+                            error_code: Some(error_code.to_string()),
+                        });
+                    }
+                }
             }
             Err(err) => {
                 let (error_code, message, retryable) = match err {
@@ -2111,7 +2815,10 @@ async fn stop_dataflow(
         let processes = state.processes.lock().unwrap();
 
         if let Some(process_id) = &req.process_id {
-            if let Some(dora_process) = processes.get(process_id) {
+            if let Some(dora_process) = processes
+                .get(process_id)
+                .filter(|proc| proc.runtime_state.status.is_stop_candidate())
+            {
                 vec![(
                     process_id.clone(),
                     dora_process.dataflow_uuid.clone(),
@@ -2123,6 +2830,7 @@ async fn stop_dataflow(
         } else {
             processes
                 .iter()
+                .filter(|(_, proc)| proc.runtime_state.status.is_stop_candidate())
                 .map(|(id, proc)| {
                     (
                         id.clone(),
@@ -2136,12 +2844,18 @@ async fn stop_dataflow(
 
     let mut stopped_count = 0;
     let mut error_count = 0;
-    let mut to_remove = Vec::new();
+    let mut first_error_code: Option<&'static str> = None;
 
     for (process_id, dataflow_uuid, yaml_path) in stop_info {
         info!(
             "stop.attempt process_id={} yaml_path={} uuid={:?}",
             process_id, yaml_path, dataflow_uuid
+        );
+        update_process_status(
+            &state,
+            &process_id,
+            DataflowLifecycleStatus::Stopping,
+            "Stop request accepted; waiting for dora stop confirmation.",
         );
         #[cfg(test)]
         let forced_stop_error = get_forced_stop_error(&state);
@@ -2157,13 +2871,38 @@ async fn stop_dataflow(
         };
 
         match stop_result {
-            Ok(_msg) => {
-                stopped_count += 1;
-                to_remove.push(process_id);
-
-                let killed_processes = cleanup_stale_node_processes(&yaml_path);
-                if !killed_processes.is_empty() {
-                    info!("Cleaned up stale node processes: {:?}", killed_processes);
+            Ok(stop_message) => {
+                match confirm_stop_completion(&state, &process_id, &yaml_path).await {
+                    Ok(confirmation_message) => {
+                        stopped_count += 1;
+                        update_process_status(
+                            &state,
+                            &process_id,
+                            DataflowLifecycleStatus::Stopped,
+                            if stop_message.trim().is_empty() {
+                                confirmation_message
+                            } else {
+                                format!(
+                                    "Stop command completed: {}. {}",
+                                    stop_message, confirmation_message
+                                )
+                            },
+                        );
+                    }
+                    Err((error_code, diagnostics)) => {
+                        error!(
+                            "stop.confirmation_failed process_id={} yaml_path={} code={} diagnostics={}",
+                            process_id, yaml_path, error_code, diagnostics
+                        );
+                        update_process_status(
+                            &state,
+                            &process_id,
+                            DataflowLifecycleStatus::Failed,
+                            format!("Stop failed: {}", diagnostics),
+                        );
+                        first_error_code.get_or_insert(error_code);
+                        error_count += 1;
+                    }
                 }
             }
             Err(e) => {
@@ -2171,27 +2910,33 @@ async fn stop_dataflow(
                     "stop.failed process_id={} yaml_path={} err={}",
                     process_id, yaml_path, e
                 );
+                update_process_status(
+                    &state,
+                    &process_id,
+                    DataflowLifecycleStatus::Failed,
+                    format!("Stop failed: {}", e),
+                );
+                first_error_code.get_or_insert(ERR_STOP_CONFIRMATION_FAILED);
                 error_count += 1;
             }
         }
     }
 
-    let mut processes = state.processes.lock().unwrap();
-    for process_id in to_remove {
-        processes.remove(&process_id);
-    }
+    let response_error_code = if error_count == 0 {
+        None
+    } else if error_count == 1 && stopped_count == 0 {
+        first_error_code.map(|code| code.to_string())
+    } else {
+        Some(ERR_STOP_PARTIAL_FAILURE.to_string())
+    };
 
     Json(StopDataflowResponse {
-        success: true,
+        success: error_count == 0,
         message: format!(
             "Stopped {} dataflow(s) with {} errors",
             stopped_count, error_count
         ),
-        error_code: if error_count > 0 {
-            Some(ERR_STOP_PARTIAL_FAILURE.to_string())
-        } else {
-            None
-        },
+        error_code: response_error_code,
     })
 }
 
@@ -2348,6 +3093,10 @@ mod api_path_tests {
             dataflow_uuid: uuid.map(|s| s.to_string()),
             log_tx,
             log_backlog: Arc::new(Mutex::new(VecDeque::new())),
+            runtime_state: RuntimeRegistryState::new(
+                DataflowLifecycleStatus::Running,
+                "Mock process inserted for test.",
+            ),
         };
         state
             .processes
@@ -2610,19 +3359,164 @@ mod api_path_tests {
     }
 
     #[tokio::test]
-    async fn test_status_returns_not_found_for_unknown_process() {
+    async fn test_run_dataflow_returns_start_confirmation_failed_error_code() {
+        let state = make_state_with_behavior(TestBehavior {
+            force_dora_installed: Some(true),
+            force_run_outcome: Some(ForcedRunOutcome::StartSucceeded(Some(
+                "11111111-2222-3333-4444-555555555555".to_string(),
+            ))),
+            force_run_confirmation_outcome: Some(ForcedRunConfirmationOutcome::Timeout),
+            ..Default::default()
+        });
+        let req = RunDataflowRequest {
+            dataflow_yaml: "nodes: []\n".to_string(),
+            working_dir: Some(writable_working_dir()),
+        };
+
+        let Json(resp) = run_dataflow(State(state.clone()), Json(req)).await;
+
+        assert!(!resp.success);
+        assert_eq!(
+            resp.error_code.as_deref(),
+            Some(ERR_START_CONFIRMATION_FAILED)
+        );
+        assert!(resp.process_id.is_some());
+
+        let process_id = resp.process_id.expect("failed confirmation process id");
+        let process = state
+            .processes
+            .lock()
+            .expect("lock process map after failed confirmation")
+            .get(&process_id)
+            .expect("process retained for failed confirmation")
+            .clone();
+        assert_eq!(
+            process.runtime_state.status,
+            DataflowLifecycleStatus::Failed
+        );
+        assert!(process
+            .runtime_state
+            .message
+            .contains("Start confirmation failed"));
+    }
+
+    #[tokio::test]
+    async fn test_run_dataflow_returns_start_confirmation_failed_when_probe_breaks() {
+        let state = make_state_with_behavior(TestBehavior {
+            force_dora_installed: Some(true),
+            force_run_outcome: Some(ForcedRunOutcome::StartSucceeded(Some(
+                "66666666-7777-8888-9999-000000000000".to_string(),
+            ))),
+            force_run_confirmation_outcome: Some(ForcedRunConfirmationOutcome::ProbeFailed(
+                "mock startup probe unavailable".to_string(),
+            )),
+            ..Default::default()
+        });
+        let req = RunDataflowRequest {
+            dataflow_yaml: "nodes: []\n".to_string(),
+            working_dir: Some(writable_working_dir()),
+        };
+
+        let Json(resp) = run_dataflow(State(state.clone()), Json(req)).await;
+
+        assert!(!resp.success);
+        assert_eq!(
+            resp.error_code.as_deref(),
+            Some(ERR_START_CONFIRMATION_FAILED)
+        );
+        assert!(resp.message.contains("probe failed"));
+    }
+
+    #[test]
+    fn test_dataflow_lifecycle_status_serializes_to_contract_values() {
+        let cases = [
+            (DataflowLifecycleStatus::Idle, "Idle"),
+            (DataflowLifecycleStatus::Starting, "Starting"),
+            (DataflowLifecycleStatus::Running, "Running"),
+            (DataflowLifecycleStatus::Stopping, "Stopping"),
+            (DataflowLifecycleStatus::Stopped, "Stopped"),
+            (DataflowLifecycleStatus::Failed, "Failed"),
+            (DataflowLifecycleStatus::Unknown, "Unknown"),
+        ];
+
+        for (status, expected) in cases {
+            let value = serde_json::to_value(status).expect("serialize lifecycle status");
+            assert_eq!(value, serde_json::Value::String(expected.to_string()));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_status_returns_idle_for_unknown_process() {
         let state = Arc::new(AppState::new());
         let Json(resp) = get_dataflow_status(State(state), Path("unknown".to_string())).await;
 
         assert_eq!(resp.process_id, "unknown");
-        assert_eq!(resp.status, "not_found");
+        assert_eq!(resp.status, DataflowLifecycleStatus::Idle);
         assert_eq!(resp.total_nodes, 0);
         assert_eq!(resp.running_nodes, 0);
         assert_eq!(resp.error_nodes, 0);
+        assert_eq!(resp.source, DataflowStatusSource::Registry);
+        assert!(!resp.stale);
+        assert!(resp.message.contains("not registered"));
     }
 
     #[tokio::test]
-    async fn test_status_returns_stopped_for_registered_process_without_yaml() {
+    async fn test_status_response_json_uses_contract_status_names() {
+        let state = Arc::new(AppState::new());
+
+        let idle_json = serde_json::to_value(build_dataflow_status_response(&state, "unknown"))
+            .expect("serialize idle status response");
+        assert_eq!(
+            idle_json.get("status"),
+            Some(&serde_json::Value::String("Idle".to_string()))
+        );
+
+        let process_id = "process_contract_status_json_test".to_string();
+        let missing_yaml = std::env::temp_dir()
+            .join("doramate_status_contract_json_missing.yml")
+            .to_string_lossy()
+            .to_string();
+        let (log_tx, _log_rx) = broadcast::channel::<LogEntry>(16);
+        let mut runtime_state =
+            RuntimeRegistryState::new(DataflowLifecycleStatus::Running, "cached running snapshot");
+        runtime_state.record_probe_success(
+            DataflowLifecycleStatus::Running,
+            "Detected 1 running node(s).",
+            1,
+            1,
+            0,
+            vec![NodeDetail {
+                id: "camera".to_string(),
+                node_type: "opencv-video-capture".to_string(),
+                is_running: true,
+            }],
+            false,
+        );
+        let dora_process = DoraProcess {
+            _id: process_id.clone(),
+            yaml_path: missing_yaml,
+            started_at: std::time::Instant::now(),
+            dataflow_uuid: None,
+            log_tx,
+            log_backlog: Arc::new(Mutex::new(VecDeque::new())),
+            runtime_state,
+        };
+        state
+            .processes
+            .lock()
+            .expect("lock process map")
+            .insert(process_id.clone(), dora_process);
+
+        let running_json = serde_json::to_value(build_dataflow_status_response(&state, &process_id))
+            .expect("serialize running status response");
+        assert_eq!(
+            running_json.get("status"),
+            Some(&serde_json::Value::String("Running".to_string()))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_status_returns_unknown_for_registered_process_without_yaml() {
         let state = Arc::new(AppState::new());
         let process_id = "process_for_status_test".to_string();
         let missing_yaml = std::env::temp_dir()
@@ -2637,6 +3531,10 @@ mod api_path_tests {
             dataflow_uuid: None,
             log_tx,
             log_backlog: Arc::new(Mutex::new(VecDeque::new())),
+            runtime_state: RuntimeRegistryState::new(
+                DataflowLifecycleStatus::Running,
+                "Inserted for missing YAML status test.",
+            ),
         };
         state
             .processes
@@ -2647,10 +3545,65 @@ mod api_path_tests {
         let Json(resp) = get_dataflow_status(State(state), Path(process_id.clone())).await;
 
         assert_eq!(resp.process_id, process_id);
-        assert_eq!(resp.status, "stopped");
+        assert_eq!(resp.status, DataflowLifecycleStatus::Unknown);
         assert_eq!(resp.total_nodes, 0);
         assert_eq!(resp.running_nodes, 0);
         assert_eq!(resp.error_nodes, 0);
+        assert_eq!(resp.source, DataflowStatusSource::Registry);
+        assert!(resp.stale);
+        assert!(resp.message.contains("failed to parse YAML"));
+    }
+
+    #[tokio::test]
+    async fn test_status_uses_last_registry_snapshot_when_probe_fails() {
+        let state = Arc::new(AppState::new());
+        let process_id = "process_registry_fallback_test".to_string();
+        let missing_yaml = std::env::temp_dir()
+            .join("doramate_status_registry_fallback_missing.yml")
+            .to_string_lossy()
+            .to_string();
+        let (log_tx, _log_rx) = broadcast::channel::<LogEntry>(16);
+        let mut runtime_state =
+            RuntimeRegistryState::new(DataflowLifecycleStatus::Running, "cached running snapshot");
+        runtime_state.record_probe_success(
+            DataflowLifecycleStatus::Running,
+            "Detected 1 running node(s).",
+            2,
+            1,
+            1,
+            vec![NodeDetail {
+                id: "camera".to_string(),
+                node_type: "opencv-video-capture".to_string(),
+                is_running: true,
+            }],
+            false,
+        );
+        let dora_process = DoraProcess {
+            _id: process_id.clone(),
+            yaml_path: missing_yaml,
+            started_at: std::time::Instant::now(),
+            dataflow_uuid: None,
+            log_tx,
+            log_backlog: Arc::new(Mutex::new(VecDeque::new())),
+            runtime_state,
+        };
+        state
+            .processes
+            .lock()
+            .expect("lock process map")
+            .insert(process_id.clone(), dora_process);
+
+        let Json(resp) = get_dataflow_status(State(state), Path(process_id.clone())).await;
+
+        assert_eq!(resp.process_id, process_id);
+        assert_eq!(resp.status, DataflowLifecycleStatus::Running);
+        assert_eq!(resp.total_nodes, 2);
+        assert_eq!(resp.running_nodes, 1);
+        assert_eq!(resp.error_nodes, 1);
+        assert_eq!(resp.node_details.len(), 1);
+        assert_eq!(resp.source, DataflowStatusSource::Registry);
+        assert!(resp.stale);
+        assert!(resp.message.contains("Using last known registry snapshot"));
     }
 
     #[tokio::test]
@@ -2690,14 +3643,88 @@ mod api_path_tests {
 
         let Json(resp) = stop_dataflow(State(state.clone()), Json(req)).await;
 
-        assert!(resp.success);
+        assert!(!resp.success);
         assert!(resp.message.contains("Stopped 0 dataflow(s) with 1 errors"));
-        assert_eq!(resp.error_code.as_deref(), Some(ERR_STOP_PARTIAL_FAILURE));
+        assert_eq!(
+            resp.error_code.as_deref(),
+            Some(ERR_STOP_CONFIRMATION_FAILED)
+        );
         assert!(state
             .processes
             .lock()
             .expect("lock process map after stop")
             .contains_key("p-stop-fail"));
+    }
+
+    #[tokio::test]
+    async fn test_stop_returns_timeout_error_code_when_confirmation_times_out() {
+        let state = make_state_with_behavior(TestBehavior {
+            force_stop_confirmation_outcome: Some(ForcedStopConfirmationOutcome::Timeout(vec![
+                "camera".to_string(),
+                "viewer".to_string(),
+            ])),
+            ..Default::default()
+        });
+        insert_mock_process(&state, "p-stop-timeout", Some("uuid-timeout"));
+        let req = StopDataflowRequest {
+            process_id: Some("p-stop-timeout".to_string()),
+        };
+
+        let Json(resp) = stop_dataflow(State(state.clone()), Json(req)).await;
+
+        assert!(!resp.success);
+        assert!(resp.message.contains("Stopped 0 dataflow(s) with 1 errors"));
+        assert_eq!(resp.error_code.as_deref(), Some(ERR_STOP_TIMEOUT));
+
+        let process = state
+            .processes
+            .lock()
+            .expect("lock process map after timeout")
+            .get("p-stop-timeout")
+            .expect("timeout process still tracked")
+            .clone();
+        assert_eq!(
+            process.runtime_state.status,
+            DataflowLifecycleStatus::Failed
+        );
+        assert!(process.runtime_state.message.contains("Residual nodes"));
+        assert!(process.runtime_state.stale);
+    }
+
+    #[tokio::test]
+    async fn test_stop_returns_confirmation_failed_when_probe_breaks() {
+        let state = make_state_with_behavior(TestBehavior {
+            force_stop_confirmation_outcome: Some(ForcedStopConfirmationOutcome::ProbeFailed(
+                "mock probe unavailable".to_string(),
+            )),
+            ..Default::default()
+        });
+        insert_mock_process(&state, "p-stop-probe-fail", Some("uuid-probe-fail"));
+        let req = StopDataflowRequest {
+            process_id: Some("p-stop-probe-fail".to_string()),
+        };
+
+        let Json(resp) = stop_dataflow(State(state.clone()), Json(req)).await;
+
+        assert!(!resp.success);
+        assert_eq!(
+            resp.error_code.as_deref(),
+            Some(ERR_STOP_CONFIRMATION_FAILED)
+        );
+
+        let process = state
+            .processes
+            .lock()
+            .expect("lock process map after probe fail")
+            .get("p-stop-probe-fail")
+            .expect("probe fail process still tracked")
+            .clone();
+        assert_eq!(
+            process.runtime_state.status,
+            DataflowLifecycleStatus::Failed
+        );
+        assert!(process.runtime_state.message.contains("probe failed"));
+        assert!(process.runtime_state.stale);
     }
 
     #[tokio::test]
@@ -2840,37 +3867,76 @@ fn build_dataflow_status_response(
             (
                 dora_process.started_at.elapsed().as_secs(),
                 dora_process.yaml_path.clone(),
+                dora_process.runtime_state.clone(),
             )
         })
     };
 
-    if let Some((uptime, yaml_path)) = process_snapshot {
-        let (total_nodes, running_nodes, error_nodes, node_details) =
-            check_all_nodes_status(&yaml_path);
-        let status = if running_nodes > 0 {
-            "running"
-        } else {
-            "stopped"
-        };
+    if let Some((uptime, yaml_path, runtime_state)) = process_snapshot {
+        match probe_dataflow_nodes(&yaml_path) {
+            Ok(probe) => {
+                let (status, stale, message) =
+                    derive_status_from_probe(&runtime_state, uptime, &probe);
 
-        DataflowStatusResponse {
-            process_id: process_id.to_string(),
-            status: status.to_string(),
-            uptime_seconds: uptime,
-            total_nodes,
-            running_nodes,
-            error_nodes,
-            node_details,
+                update_process_runtime_state(state, process_id, |registry_state| {
+                    registry_state.record_probe_success(
+                        status,
+                        message.clone(),
+                        probe.total_nodes,
+                        probe.running_nodes,
+                        probe.error_nodes,
+                        probe.node_details.clone(),
+                        stale,
+                    );
+                });
+
+                let registry_snapshot = {
+                    let processes = state.processes.lock().unwrap();
+                    processes
+                        .get(process_id)
+                        .map(|process| process.runtime_state.clone())
+                };
+
+                registry_snapshot
+                    .unwrap_or_else(|| RuntimeRegistryState::new(status, message))
+                    .to_response(process_id, uptime)
+            }
+            Err(err) => {
+                let probe_failure_message = format!("Status probe failed to parse YAML: {}", err);
+                update_process_runtime_state(state, process_id, |registry_state| {
+                    registry_state.record_probe_failure(probe_failure_message.clone());
+                });
+
+                let registry_snapshot = {
+                    let processes = state.processes.lock().unwrap();
+                    processes
+                        .get(process_id)
+                        .map(|process| process.runtime_state.clone())
+                };
+
+                registry_snapshot
+                    .unwrap_or_else(|| {
+                        let mut snapshot =
+                            RuntimeRegistryState::new(DataflowLifecycleStatus::Unknown, "");
+                        snapshot.record_probe_failure(probe_failure_message);
+                        snapshot
+                    })
+                    .to_response(process_id, uptime)
+            }
         }
     } else {
         DataflowStatusResponse {
             process_id: process_id.to_string(),
-            status: "not_found".to_string(),
+            status: DataflowLifecycleStatus::Idle,
             uptime_seconds: 0,
             total_nodes: 0,
             running_nodes: 0,
             error_nodes: 0,
             node_details: vec![],
+            last_updated_at: now_rfc3339(),
+            source: DataflowStatusSource::Registry,
+            stale: false,
+            message: "Process is not registered in LocalAgent.".to_string(),
         }
     }
 }

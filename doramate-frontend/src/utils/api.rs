@@ -138,12 +138,21 @@ pub struct NodeTemplatesConfigResponse {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DataflowStatusResponse {
     pub process_id: String,
-    pub status: String,
+    pub status: DataflowLifecycleStatus,
     pub uptime_seconds: u64,
     pub total_nodes: usize,
     pub running_nodes: usize,
     pub error_nodes: usize,
+    #[serde(default)]
     pub node_details: Vec<NodeDetail>,
+    #[serde(default)]
+    pub last_updated_at: String,
+    #[serde(default = "default_status_source")]
+    pub source: DataflowStatusSource,
+    #[serde(default)]
+    pub stale: bool,
+    #[serde(default)]
+    pub message: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -151,6 +160,69 @@ pub struct NodeDetail {
     pub id: String,
     pub node_type: String,
     pub is_running: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataflowLifecycleStatus {
+    #[serde(rename = "Idle", alias = "idle", alias = "not_found")]
+    Idle,
+    #[serde(rename = "Starting", alias = "starting")]
+    Starting,
+    #[serde(rename = "Running", alias = "running")]
+    Running,
+    #[serde(rename = "Stopping", alias = "stopping")]
+    Stopping,
+    #[serde(rename = "Stopped", alias = "stopped")]
+    Stopped,
+    #[serde(rename = "Failed", alias = "failed")]
+    Failed,
+    #[serde(rename = "Unknown", alias = "unknown", alias = "error")]
+    Unknown,
+}
+
+impl DataflowLifecycleStatus {
+    pub fn is_terminal(self) -> bool {
+        matches!(
+            self,
+            DataflowLifecycleStatus::Idle
+                | DataflowLifecycleStatus::Stopped
+                | DataflowLifecycleStatus::Failed
+                | DataflowLifecycleStatus::Unknown
+        )
+    }
+
+    pub fn indicates_stopped(self) -> bool {
+        matches!(
+            self,
+            DataflowLifecycleStatus::Idle | DataflowLifecycleStatus::Stopped
+        )
+    }
+}
+
+impl Default for DataflowLifecycleStatus {
+    fn default() -> Self {
+        DataflowLifecycleStatus::Unknown
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataflowStatusSource {
+    #[serde(rename = "registry")]
+    Registry,
+    #[serde(rename = "process_scan")]
+    ProcessScan,
+    #[serde(rename = "registry_and_process_scan")]
+    RegistryAndProcessScan,
+}
+
+impl Default for DataflowStatusSource {
+    fn default() -> Self {
+        DataflowStatusSource::Registry
+    }
+}
+
+fn default_status_source() -> DataflowStatusSource {
+    DataflowStatusSource::Registry
 }
 
 fn normalize_js_error(err: &JsValue) -> String {
@@ -191,12 +263,18 @@ pub fn friendly_error_message(error_code: Option<&str>, fallback_message: &str) 
         Some("DORA_START_SPAWN_FAILED") => {
             "Failed to spawn dora process. Check dora command availability.".to_string()
         }
+        Some("START_CONFIRMATION_FAILED") => {
+            "dora start returned, but DoraMate could not confirm the dataflow entered running state."
+                .to_string()
+        }
         Some("DIRECTORY_PICKER_FAILED") => {
             "Failed to open directory picker in LocalAgent.".to_string()
         }
         Some("FILE_PICKER_FAILED") => "Failed to open file picker in LocalAgent.".to_string(),
         Some("FILE_SAVE_CANCELLED") => "Save file cancelled.".to_string(),
-        Some("FILE_SAVE_DIALOG_FAILED") => "Failed to open save file dialog in LocalAgent.".to_string(),
+        Some("FILE_SAVE_DIALOG_FAILED") => {
+            "Failed to open save file dialog in LocalAgent.".to_string()
+        }
         Some("FILE_READ_FAILED") => {
             "Failed to read file content. Check path and permissions.".to_string()
         }
@@ -215,6 +293,12 @@ pub fn friendly_error_message(error_code: Option<&str>, fallback_message: &str) 
         }
         Some("STOP_PARTIAL_FAILURE") => {
             "Some dataflows failed to stop. Check LocalAgent logs for details.".to_string()
+        }
+        Some("STOP_TIMEOUT") => {
+            "Stop confirmation timed out. Some node processes may still be running.".to_string()
+        }
+        Some("STOP_CONFIRMATION_FAILED") => {
+            "Stop confirmation failed. Check LocalAgent diagnostics and runtime status.".to_string()
         }
         _ => fallback_message.to_string(),
     }
@@ -472,6 +556,10 @@ mod tests {
             friendly_error_message(Some("FILE_WRITE_FAILED"), "Failed to write selected file");
         assert!(file_write_msg.contains("write file content"));
 
+        let start_confirm_msg =
+            friendly_error_message(Some("START_CONFIRMATION_FAILED"), "raw backend message");
+        assert!(start_confirm_msg.contains("could not confirm"));
+
         let unknown_code_msg = friendly_error_message(Some("UNKNOWN_CODE"), "raw backend message");
         assert_eq!(unknown_code_msg, "raw backend message");
 
@@ -498,6 +586,13 @@ mod tests {
             "raw backend message",
         );
         assert!(write_msg.contains("write node templates config YAML"));
+
+        let stop_timeout = friendly_error_message(Some("STOP_TIMEOUT"), "raw backend message");
+        assert!(stop_timeout.contains("timed out"));
+
+        let stop_probe_fail =
+            friendly_error_message(Some("STOP_CONFIRMATION_FAILED"), "raw backend message");
+        assert!(stop_probe_fail.contains("confirmation failed"));
     }
 
     #[test]
@@ -534,6 +629,51 @@ mod tests {
         assert!(json.contains("\"content\":\"nodes: []\\n\""));
         assert!(json.contains("\"default_file_name\":\"dataflow.yml\""));
         assert!(json.contains("\"working_dir\":\"C:/tmp\""));
+    }
+
+    #[test]
+    fn test_dataflow_status_response_deserializes_new_contract() {
+        let json = r#"{
+            "process_id":"p-1",
+            "status":"Starting",
+            "uptime_seconds":1,
+            "total_nodes":2,
+            "running_nodes":0,
+            "error_nodes":2,
+            "node_details":[],
+            "last_updated_at":"2026-04-18T12:00:00Z",
+            "source":"registry_and_process_scan",
+            "stale":false,
+            "message":"waiting for nodes"
+        }"#;
+
+        let parsed: DataflowStatusResponse =
+            serde_json::from_str(json).expect("deserialize new status response");
+
+        assert_eq!(parsed.status, DataflowLifecycleStatus::Starting);
+        assert_eq!(parsed.source, DataflowStatusSource::RegistryAndProcessScan);
+        assert_eq!(parsed.message, "waiting for nodes");
+        assert!(!parsed.status.is_terminal());
+    }
+
+    #[test]
+    fn test_dataflow_status_response_deserializes_legacy_strings() {
+        let json = r#"{
+            "process_id":"p-legacy",
+            "status":"not_found",
+            "uptime_seconds":0,
+            "total_nodes":0,
+            "running_nodes":0,
+            "error_nodes":0,
+            "node_details":[]
+        }"#;
+
+        let parsed: DataflowStatusResponse =
+            serde_json::from_str(json).expect("deserialize legacy status response");
+
+        assert_eq!(parsed.status, DataflowLifecycleStatus::Idle);
+        assert_eq!(parsed.source, DataflowStatusSource::Registry);
+        assert!(parsed.status.indicates_stopped());
     }
 
     #[cfg(target_arch = "wasm32")]

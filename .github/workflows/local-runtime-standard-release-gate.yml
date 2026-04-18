@@ -1,0 +1,58 @@
+name: local-runtime-standard-release-gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      rounds:
+        description: "Smoke rounds for the standard release gate (20-50)"
+        required: false
+        default: "20"
+
+jobs:
+  windows-standard-release-gate:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Vendor Dora source
+        run: ./dora-api-csharp/scripts/bootstrap-dora.ps1
+
+      - name: Build Dora CLI
+        working-directory: ./dora-api-csharp/third_party/dora
+        run: cargo build -p dora-cli --release
+
+      - name: Add Dora CLI to PATH
+        run: |
+          $doraBin = Join-Path $PWD 'dora-api-csharp/third_party/dora/target/release'
+          $doraBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & (Join-Path $doraBin 'dora.exe') --version
+
+      - name: Run standard local runtime release gate
+        run: ./scripts/release-gate-local-runtime-standard.ps1 -Rounds ${{ github.event.inputs.rounds }}
+
+      - name: Upload release gate summaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-runtime-release-gate-windows
+          path: out/release-gates/
+          if-no-files-found: warn
