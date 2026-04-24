@@ -444,6 +444,12 @@ impl RuntimeRegistryState {
     }
 }
 
+fn serialize_status_payload(status: &DataflowStatusResponse) -> String {
+    serde_json::to_string(status).unwrap_or_else(|_| {
+        "{\"process_id\":\"\",\"status\":\"Unknown\",\"uptime_seconds\":0,\"total_nodes\":0,\"running_nodes\":0,\"error_nodes\":0,\"node_details\":[],\"last_updated_at\":\"\",\"source\":\"registry\",\"stale\":true,\"message\":\"failed to serialize status payload\"}".to_string()
+    })
+}
+
 #[derive(Clone, Debug)]
 struct NodeProbeSnapshot {
     total_nodes: usize,
@@ -1228,9 +1234,7 @@ async fn handle_status_stream_websocket(
         loop {
             ticker.tick().await;
             let status = build_dataflow_status_response(&state_for_send, &process_id_for_send);
-            let payload = serde_json::to_string(&status).unwrap_or_else(|_| {
-                "{\"process_id\":\"\",\"status\":\"Unknown\",\"uptime_seconds\":0,\"total_nodes\":0,\"running_nodes\":0,\"error_nodes\":0,\"node_details\":[],\"last_updated_at\":\"\",\"source\":\"registry\",\"stale\":true,\"message\":\"failed to serialize status payload\"}".to_string()
-            });
+            let payload = serialize_status_payload(&status);
 
             if sender.send(Message::Text(payload)).await.is_err() {
                 break;
@@ -3513,6 +3517,104 @@ mod api_path_tests {
             running_json.get("status"),
             Some(&serde_json::Value::String("Running".to_string()))
         );
+    }
+
+    #[tokio::test]
+    async fn test_status_stream_payload_matches_http_response_for_unknown_process() {
+        let state = Arc::new(AppState::new());
+        let process_id = "unknown".to_string();
+
+        let Json(http_resp) = get_dataflow_status(State(state.clone()), Path(process_id.clone())).await;
+        let ws_payload = serialize_status_payload(&build_dataflow_status_response(&state, &process_id));
+
+        let http_json = serde_json::to_value(http_resp).expect("serialize http status response");
+        let ws_json: serde_json::Value =
+            serde_json::from_str(&ws_payload).expect("deserialize websocket status payload");
+
+        assert_eq!(ws_json.get("process_id"), http_json.get("process_id"));
+        assert_eq!(ws_json.get("status"), http_json.get("status"));
+        assert_eq!(ws_json.get("uptime_seconds"), http_json.get("uptime_seconds"));
+        assert_eq!(ws_json.get("total_nodes"), http_json.get("total_nodes"));
+        assert_eq!(ws_json.get("running_nodes"), http_json.get("running_nodes"));
+        assert_eq!(ws_json.get("error_nodes"), http_json.get("error_nodes"));
+        assert_eq!(ws_json.get("node_details"), http_json.get("node_details"));
+        assert_eq!(ws_json.get("source"), http_json.get("source"));
+        assert_eq!(ws_json.get("stale"), http_json.get("stale"));
+        assert_eq!(ws_json.get("message"), http_json.get("message"));
+        assert!(ws_json
+            .get("last_updated_at")
+            .and_then(|value| value.as_str())
+            .is_some_and(|value| !value.is_empty()));
+        assert!(http_json
+            .get("last_updated_at")
+            .and_then(|value| value.as_str())
+            .is_some_and(|value| !value.is_empty()));
+    }
+
+    #[tokio::test]
+    async fn test_status_stream_payload_matches_http_response_for_registered_process() {
+        let state = Arc::new(AppState::new());
+        let process_id = "process_status_stream_contract_test".to_string();
+        let missing_yaml = std::env::temp_dir()
+            .join("doramate_status_stream_contract_missing.yml")
+            .to_string_lossy()
+            .to_string();
+        let (log_tx, _log_rx) = broadcast::channel::<LogEntry>(16);
+        let mut runtime_state =
+            RuntimeRegistryState::new(DataflowLifecycleStatus::Running, "cached running snapshot");
+        runtime_state.record_probe_success(
+            DataflowLifecycleStatus::Running,
+            "Detected 1 running node(s).",
+            1,
+            1,
+            0,
+            vec![NodeDetail {
+                id: "camera".to_string(),
+                node_type: "opencv-video-capture".to_string(),
+                is_running: true,
+            }],
+            false,
+        );
+        let dora_process = DoraProcess {
+            _id: process_id.clone(),
+            yaml_path: missing_yaml,
+            started_at: std::time::Instant::now(),
+            dataflow_uuid: None,
+            log_tx,
+            log_backlog: Arc::new(Mutex::new(VecDeque::new())),
+            runtime_state,
+        };
+        state
+            .processes
+            .lock()
+            .expect("lock process map")
+            .insert(process_id.clone(), dora_process);
+
+        let Json(http_resp) = get_dataflow_status(State(state.clone()), Path(process_id.clone())).await;
+        let ws_payload = serialize_status_payload(&build_dataflow_status_response(&state, &process_id));
+
+        let http_json = serde_json::to_value(http_resp).expect("serialize http status response");
+        let ws_json: serde_json::Value =
+            serde_json::from_str(&ws_payload).expect("deserialize websocket status payload");
+
+        assert_eq!(ws_json.get("process_id"), http_json.get("process_id"));
+        assert_eq!(ws_json.get("status"), http_json.get("status"));
+        assert_eq!(ws_json.get("uptime_seconds"), http_json.get("uptime_seconds"));
+        assert_eq!(ws_json.get("total_nodes"), http_json.get("total_nodes"));
+        assert_eq!(ws_json.get("running_nodes"), http_json.get("running_nodes"));
+        assert_eq!(ws_json.get("error_nodes"), http_json.get("error_nodes"));
+        assert_eq!(ws_json.get("node_details"), http_json.get("node_details"));
+        assert_eq!(ws_json.get("source"), http_json.get("source"));
+        assert_eq!(ws_json.get("stale"), http_json.get("stale"));
+        assert_eq!(ws_json.get("message"), http_json.get("message"));
+        assert!(ws_json
+            .get("last_updated_at")
+            .and_then(|value| value.as_str())
+            .is_some_and(|value| !value.is_empty()));
+        assert!(http_json
+            .get("last_updated_at")
+            .and_then(|value| value.as_str())
+            .is_some_and(|value| !value.is_empty()));
     }
 
     #[tokio::test]

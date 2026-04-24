@@ -1,0 +1,28 @@
+name: local-runtime-trend-summary
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows-local-runtime-trend-summary:
+    name: windows-local-runtime-trend-summary
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run local runtime trend summary
+        run: ./scripts/summarize-local-runtime-trends.ps1
+
+      - name: Upload trend summaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-runtime-trend-summary-windows
+          path: out/release-gates/trends/
+          if-no-files-found: warn
