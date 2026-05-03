@@ -1,0 +1,8 @@
+# 忽略前端和后端编译产物
+**/dist/
+**/target/
+**/out/
+
+# 忽略 IDE 临时文件
+.claude/
+.vscode/
