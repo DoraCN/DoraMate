@@ -3527,28 +3527,7 @@ mod api_path_tests {
         let Json(http_resp) = get_dataflow_status(State(state.clone()), Path(process_id.clone())).await;
         let ws_payload = serialize_status_payload(&build_dataflow_status_response(&state, &process_id));
 
-        let http_json = serde_json::to_value(http_resp).expect("serialize http status response");
-        let ws_json: serde_json::Value =
-            serde_json::from_str(&ws_payload).expect("deserialize websocket status payload");
-
-        assert_eq!(ws_json.get("process_id"), http_json.get("process_id"));
-        assert_eq!(ws_json.get("status"), http_json.get("status"));
-        assert_eq!(ws_json.get("uptime_seconds"), http_json.get("uptime_seconds"));
-        assert_eq!(ws_json.get("total_nodes"), http_json.get("total_nodes"));
-        assert_eq!(ws_json.get("running_nodes"), http_json.get("running_nodes"));
-        assert_eq!(ws_json.get("error_nodes"), http_json.get("error_nodes"));
-        assert_eq!(ws_json.get("node_details"), http_json.get("node_details"));
-        assert_eq!(ws_json.get("source"), http_json.get("source"));
-        assert_eq!(ws_json.get("stale"), http_json.get("stale"));
-        assert_eq!(ws_json.get("message"), http_json.get("message"));
-        assert!(ws_json
-            .get("last_updated_at")
-            .and_then(|value| value.as_str())
-            .is_some_and(|value| !value.is_empty()));
-        assert!(http_json
-            .get("last_updated_at")
-            .and_then(|value| value.as_str())
-            .is_some_and(|value| !value.is_empty()));
+        assert_http_ws_payloads_match(&http_resp, &ws_payload);
     }
 
     #[tokio::test]
@@ -3593,9 +3572,13 @@ mod api_path_tests {
         let Json(http_resp) = get_dataflow_status(State(state.clone()), Path(process_id.clone())).await;
         let ws_payload = serialize_status_payload(&build_dataflow_status_response(&state, &process_id));
 
+        assert_http_ws_payloads_match(&http_resp, &ws_payload);
+    }
+
+    fn assert_http_ws_payloads_match(http_resp: &DataflowStatusResponse, ws_payload: &str) {
         let http_json = serde_json::to_value(http_resp).expect("serialize http status response");
         let ws_json: serde_json::Value =
-            serde_json::from_str(&ws_payload).expect("deserialize websocket status payload");
+            serde_json::from_str(ws_payload).expect("deserialize websocket status payload");
 
         assert_eq!(ws_json.get("process_id"), http_json.get("process_id"));
         assert_eq!(ws_json.get("status"), http_json.get("status"));
@@ -3911,6 +3894,205 @@ mod api_path_tests {
 
         let actual = std::fs::read_to_string(&output_path).expect("read written output file");
         assert_eq!(actual, yaml);
+    }
+
+    #[tokio::test]
+    async fn test_status_stream_payload_matches_http_response_for_starting_process() {
+        let state = Arc::new(AppState::new());
+        let process_id = "process_starting_consistency_test".to_string();
+        let temp_yaml = std::env::temp_dir()
+            .join("doramate_starting_consistency_test.yml")
+            .to_string_lossy()
+            .to_string();
+        std::fs::write(
+            &temp_yaml,
+            "nodes:\n  - id: test-node\n    path: target/release/test_node\n",
+        )
+        .expect("write temp yaml");
+
+        let (log_tx, _log_rx) = broadcast::channel::<LogEntry>(16);
+        let runtime_state = RuntimeRegistryState::new(
+            DataflowLifecycleStatus::Starting,
+            "Run accepted; waiting for probe.",
+        );
+        let dora_process = DoraProcess {
+            _id: process_id.clone(),
+            yaml_path: temp_yaml,
+            started_at: std::time::Instant::now(),
+            dataflow_uuid: None,
+            log_tx,
+            log_backlog: Arc::new(Mutex::new(VecDeque::new())),
+            runtime_state,
+        };
+        state
+            .processes
+            .lock()
+            .expect("lock process map")
+            .insert(process_id.clone(), dora_process);
+
+        let Json(http_resp) =
+            get_dataflow_status(State(state.clone()), Path(process_id.clone())).await;
+        let ws_payload =
+            serialize_status_payload(&build_dataflow_status_response(&state, &process_id));
+
+        assert_http_ws_payloads_match(&http_resp, &ws_payload);
+
+        assert_eq!(http_resp.status, DataflowLifecycleStatus::Starting);
+        assert_eq!(
+            http_resp.source,
+            DataflowStatusSource::RegistryAndProcessScan
+        );
+        assert!(!http_resp.stale);
+    }
+
+    #[tokio::test]
+    async fn test_status_stream_payload_matches_http_response_for_stopping_process() {
+        let state = Arc::new(AppState::new());
+        let process_id = "process_stopping_consistency_test".to_string();
+        let missing_yaml = std::env::temp_dir()
+            .join("doramate_stopping_consistency_missing.yml")
+            .to_string_lossy()
+            .to_string();
+        let (log_tx, _log_rx) = broadcast::channel::<LogEntry>(16);
+        let mut runtime_state = RuntimeRegistryState::new(
+            DataflowLifecycleStatus::Stopping,
+            "Stop accepted; waiting for nodes.",
+        );
+        runtime_state.record_probe_success(
+            DataflowLifecycleStatus::Stopping,
+            "Detected 1 running node(s).",
+            3,
+            1,
+            1,
+            vec![NodeDetail {
+                id: "camera".to_string(),
+                node_type: "opencv-video-capture".to_string(),
+                is_running: true,
+            }],
+            false,
+        );
+        let dora_process = DoraProcess {
+            _id: process_id.clone(),
+            yaml_path: missing_yaml,
+            started_at: std::time::Instant::now(),
+            dataflow_uuid: None,
+            log_tx,
+            log_backlog: Arc::new(Mutex::new(VecDeque::new())),
+            runtime_state,
+        };
+        state
+            .processes
+            .lock()
+            .expect("lock process map")
+            .insert(process_id.clone(), dora_process);
+
+        let Json(http_resp) =
+            get_dataflow_status(State(state.clone()), Path(process_id.clone())).await;
+        let ws_payload =
+            serialize_status_payload(&build_dataflow_status_response(&state, &process_id));
+
+        assert_http_ws_payloads_match(&http_resp, &ws_payload);
+
+        assert_eq!(http_resp.status, DataflowLifecycleStatus::Stopping);
+        assert_eq!(http_resp.source, DataflowStatusSource::Registry);
+        assert!(http_resp.stale);
+        assert!(http_resp
+            .message
+            .contains("Using last known registry snapshot"));
+    }
+
+    #[tokio::test]
+    async fn test_status_stream_payload_matches_http_response_for_stopped_process() {
+        let state = Arc::new(AppState::new());
+        let process_id = "process_stopped_consistency_test".to_string();
+        let temp_yaml = std::env::temp_dir()
+            .join("doramate_stopped_consistency_test.yml")
+            .to_string_lossy()
+            .to_string();
+        std::fs::write(
+            &temp_yaml,
+            "nodes:\n  - id: test-node\n    path: target/release/test_node\n",
+        )
+        .expect("write temp yaml");
+
+        let (log_tx, _log_rx) = broadcast::channel::<LogEntry>(16);
+        let runtime_state = RuntimeRegistryState::new(
+            DataflowLifecycleStatus::Stopping,
+            "Stop accepted; waiting for nodes to exit.",
+        );
+        let dora_process = DoraProcess {
+            _id: process_id.clone(),
+            yaml_path: temp_yaml,
+            started_at: std::time::Instant::now(),
+            dataflow_uuid: None,
+            log_tx,
+            log_backlog: Arc::new(Mutex::new(VecDeque::new())),
+            runtime_state,
+        };
+        state
+            .processes
+            .lock()
+            .expect("lock process map")
+            .insert(process_id.clone(), dora_process);
+
+        // Build once to avoid state mutation between HTTP and WS paths;
+        // the first call transitions Stopping→Stopped via record_probe_success.
+        let response = build_dataflow_status_response(&state, &process_id);
+        let ws_payload = serialize_status_payload(&response);
+
+        assert_http_ws_payloads_match(&response, &ws_payload);
+
+        assert_eq!(response.status, DataflowLifecycleStatus::Stopped);
+        assert_eq!(
+            response.source,
+            DataflowStatusSource::RegistryAndProcessScan
+        );
+        assert!(!response.stale);
+    }
+
+    #[tokio::test]
+    async fn test_status_stream_payload_matches_http_response_for_failed_process() {
+        let state = Arc::new(AppState::new());
+        let process_id = "process_failed_consistency_test".to_string();
+        let temp_yaml = std::env::temp_dir()
+            .join("doramate_failed_consistency_test.yml")
+            .to_string_lossy()
+            .to_string();
+        std::fs::write(
+            &temp_yaml,
+            "nodes:\n  - id: test-node\n    path: target/release/test_node\n",
+        )
+        .expect("write temp yaml");
+
+        let (log_tx, _log_rx) = broadcast::channel::<LogEntry>(16);
+        let runtime_state = RuntimeRegistryState::new(
+            DataflowLifecycleStatus::Failed,
+            "Stop confirmation failed; residual nodes.",
+        );
+        let dora_process = DoraProcess {
+            _id: process_id.clone(),
+            yaml_path: temp_yaml,
+            started_at: std::time::Instant::now(),
+            dataflow_uuid: None,
+            log_tx,
+            log_backlog: Arc::new(Mutex::new(VecDeque::new())),
+            runtime_state,
+        };
+        state
+            .processes
+            .lock()
+            .expect("lock process map")
+            .insert(process_id.clone(), dora_process);
+
+        let Json(http_resp) =
+            get_dataflow_status(State(state.clone()), Path(process_id.clone())).await;
+        let ws_payload =
+            serialize_status_payload(&build_dataflow_status_response(&state, &process_id));
+
+        assert_http_ws_payloads_match(&http_resp, &ws_payload);
+
+        assert_eq!(http_resp.status, DataflowLifecycleStatus::Failed);
+        assert!(http_resp.stale);
     }
 }
 

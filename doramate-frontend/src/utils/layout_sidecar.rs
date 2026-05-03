@@ -65,7 +65,10 @@ pub fn dataflow_to_layout_sidecar_json(dataflow: &Dataflow) -> Result<String, St
         .map_err(|e| format!("serialize layout sidecar failed: {}", e))
 }
 
-pub fn apply_layout_sidecar_json(dataflow: &Dataflow, sidecar_json: &str) -> Result<Dataflow, String> {
+pub fn apply_layout_sidecar_json(
+    dataflow: &Dataflow,
+    sidecar_json: &str,
+) -> Result<Dataflow, String> {
     let parsed: LayoutSidecarFile = serde_json::from_str(sidecar_json)
         .map_err(|e| format!("parse layout sidecar failed: {}", e))?;
 
