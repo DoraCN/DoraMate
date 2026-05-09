@@ -55,6 +55,33 @@ const START_CONFIRMATION_POLL_INTERVAL_MS: u64 = 250;
 const STOP_CONFIRMATION_TIMEOUT_MS: u64 = 3_000;
 const STOP_CONFIRMATION_POLL_INTERVAL_MS: u64 = 250;
 
+const LOCALAGENT_PORT: u16 = 52100;
+
+/// CLI 子命令模式
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CliMode {
+    Normal,
+    Cleanup,
+    Diagnose,
+    ForceKill,
+}
+
+impl CliMode {
+    fn from_args() -> Self {
+        let args: Vec<String> = std::env::args().collect();
+        if args.len() > 1 {
+            match args[1].as_str() {
+                "--cleanup" => CliMode::Cleanup,
+                "--diagnose" => CliMode::Diagnose,
+                "--force-kill" => CliMode::ForceKill,
+                _ => CliMode::Normal,
+            }
+        } else {
+            CliMode::Normal
+        }
+    }
+}
+
 /// 从 DoraMate YAML 中提取纯净的 DORA YAML（移除 __doramate__ 元数据）
 fn extract_clean_dora_yaml(yaml: &str) -> String {
     if let Some(doramate_pos) = yaml.find("__doramate__:") {
@@ -71,13 +98,129 @@ async fn main() -> anyhow::Result<()> {
         .with_max_level(tracing::Level::INFO)
         .init();
 
-    info!("🚀 DoraMate LocalAgent starting...");
+    let mode = CliMode::from_args();
+    match mode {
+        CliMode::Cleanup => {
+            info!("Running in --cleanup mode");
+            let cleaned = cleanup_all_residual().await;
+            if cleaned.is_empty() {
+                println!("No residual processes found. System is clean.");
+            } else {
+                println!("Cleaned {} residual process(es):", cleaned.len());
+                for name in &cleaned {
+                    println!("  - {}", name);
+                }
+            }
+            return Ok(());
+        }
+        CliMode::Diagnose => {
+            info!("Running in --diagnose mode");
+            let state = Arc::new(AppState::new());
+            let response = build_diagnose_response(&state).await;
+            println!("=== DoraMate LocalAgent Diagnose ===");
+            println!("LocalAgent PID: {}", response.localagent.pid);
+            println!("Dora CLI installed: {}", response.dora_cli.installed);
+            if response.dora_cli.installed {
+                println!("Dora CLI version: {}", response.dora_cli.version);
+            }
+            println!();
+            println!("--- Port {} ---", LOCALAGENT_PORT);
+            println!("In use: {}", response.port_52100.in_use);
+            if let Some(pid) = response.port_52100.owning_pid {
+                println!("Owner PID: {}", pid);
+            }
+            if let Some(name) = response.port_52100.owning_process {
+                println!("Owner process: {}", name);
+            }
+            println!();
+            println!("--- Dora Ports ---");
+            println!("  Coordinator (54500): {}", if response.dora_ports.coordinator_54500 { "IN USE" } else { "FREE" });
+            println!("  Daemon (54501):      {}", if response.dora_ports.daemon_54501 { "IN USE" } else { "FREE" });
+            println!("  Control (6012):      {}", if response.dora_ports.control_6012 { "IN USE" } else { "FREE" });
+            println!();
+            println!("--- Residual Processes ---");
+            if response.residual_processes.is_empty() {
+                println!("  (none)");
+            } else {
+                for proc in &response.residual_processes {
+                    println!("  PID {}: {}", proc.pid, proc.name);
+                }
+            }
+            println!();
+            println!("--- Stale Directories ---");
+            if response.stale_directories.is_empty() {
+                println!("  (none)");
+            } else {
+                for dir in &response.stale_directories {
+                    println!("  {} ({}s old)", dir.path, dir.age_seconds);
+                }
+            }
+            println!();
+            if !response.recommendations.is_empty() {
+                println!("--- Recommendations ---");
+                for rec in &response.recommendations {
+                    println!("  - {}", rec);
+                }
+            }
+            return Ok(());
+        }
+        CliMode::ForceKill => {
+            info!("Running in --force-kill mode");
+            let cleaned = cleanup_all_residual().await;
+            if cleaned.is_empty() {
+                println!("No Dora-related processes found.");
+            } else {
+                println!("Force-killed {} process(es):", cleaned.len());
+                for name in &cleaned {
+                    println!("  - {}", name);
+                }
+            }
+            return Ok(());
+        }
+        CliMode::Normal => {
+            info!("DoraMate LocalAgent starting...");
+        }
+    }
 
     let app_state = Arc::new(AppState::new());
+
+    // 启动自检
+    {
+        let mut warnings = app_state.startup_warnings.lock().unwrap();
+        if is_local_port_open(LOCALAGENT_PORT) {
+            let msg = format!(
+                "Port {} is already in use before startup.",
+                LOCALAGENT_PORT
+            );
+            warn!("{}", msg);
+            warnings.push(msg);
+        }
+        let residual = scan_dora_related_processes();
+        if !residual.is_empty() {
+            let msg = format!(
+                "Found {} residual Dora process(es) during startup self-check.",
+                residual.len()
+            );
+            warn!("{}", msg);
+            for proc in &residual {
+                warn!("  Residual process: {} (PID {})", proc.name, proc.pid);
+            }
+            warnings.push(msg);
+        }
+        if !warnings.is_empty() {
+            info!(
+                "Startup self-check complete with {} warning(s). Run 'doramate-localagent --diagnose' for details.",
+                warnings.len()
+            );
+        } else {
+            info!("Startup self-check complete. No warnings.");
+        }
+    }
 
     // 构建路由
     let app = Router::new()
         .route("/api/health", get(health_check))
+        .route("/api/diagnose", get(diagnose_handler))
         .route("/api/run", post(run_dataflow))
         .route("/api/stop", post(stop_dataflow))
         .route("/api/select-directory", post(select_directory))
@@ -135,6 +278,7 @@ async fn index() -> Html<&'static str> {
             <li>POST /api/node-templates-config - Save node templates config YAML</li>
             <li>GET /api/status-stream/:process_id - WebSocket status stream</li>
             <li>GET /api/logs/:process_id - WebSocket logs</li>
+            <li>GET /api/diagnose - System-wide diagnostic (processes, ports, directories)</li>
         </ul>
     </body>
     </html>
@@ -146,6 +290,7 @@ async fn index() -> Html<&'static str> {
 #[derive(Clone)]
 struct AppState {
     processes: Arc<Mutex<HashMap<String, DoraProcess>>>,
+    startup_warnings: Arc<Mutex<Vec<String>>>,
     #[cfg(test)]
     test_behavior: Arc<Mutex<TestBehavior>>,
 }
@@ -154,6 +299,7 @@ impl AppState {
     fn new() -> Self {
         Self {
             processes: Arc::new(Mutex::new(HashMap::new())),
+            startup_warnings: Arc::new(Mutex::new(Vec::new())),
             #[cfg(test)]
             test_behavior: Arc::new(Mutex::new(TestBehavior::default())),
         }
@@ -1081,6 +1227,59 @@ pub struct HealthResponse {
     pub dora_daemon_running: bool,
 }
 
+/// 诊断响应
+#[derive(Serialize)]
+pub struct DiagnoseResponse {
+    pub localagent: LocalAgentStatus,
+    pub dora_cli: DoraCliStatus,
+    pub port_52100: PortStatus,
+    pub dora_ports: DoraPortsInfo,
+    pub residual_processes: Vec<ResidualProcessInfo>,
+    pub stale_directories: Vec<StaleDirectoryInfo>,
+    pub startup_warnings: Vec<String>,
+    pub recommendations: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct DoraPortsInfo {
+    pub coordinator_54500: bool,
+    pub daemon_54501: bool,
+    pub control_6012: bool,
+    pub all_required_open: bool,
+}
+
+#[derive(Serialize)]
+pub struct LocalAgentStatus {
+    pub pid: u32,
+    pub uptime_seconds: u64,
+}
+
+#[derive(Serialize)]
+pub struct DoraCliStatus {
+    pub installed: bool,
+    pub version: String,
+}
+
+#[derive(Serialize, Default)]
+pub struct PortStatus {
+    pub in_use: bool,
+    pub owning_pid: Option<u32>,
+    pub owning_process: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct ResidualProcessInfo {
+    pub pid: u32,
+    pub name: String,
+    pub is_dora_related: bool,
+}
+
+#[derive(Serialize)]
+pub struct StaleDirectoryInfo {
+    pub path: String,
+    pub age_seconds: u64,
+}
+
 /// 选择目录响应
 #[derive(Serialize)]
 pub struct SelectDirectoryResponse {
@@ -1670,6 +1869,22 @@ async fn health_check() -> Json<HealthResponse> {
     info!(
         "Health check: dora_installed={}, coordinator={}, daemon={}",
         dora_installed, dora_coordinator_running, dora_daemon_running
+    );
+    Json(response)
+}
+
+/// 诊断 API
+async fn diagnose_handler(
+    State(state): State<Arc<AppState>>,
+) -> Json<DiagnoseResponse> {
+    info!("Diagnose requested");
+    let response = build_diagnose_response(&state).await;
+    let residual_count = response.residual_processes.len();
+    let stale_count = response.stale_directories.len();
+    let warning_count = response.startup_warnings.len();
+    info!(
+        "Diagnose complete: {} residual processes, {} stale directories, {} startup warnings",
+        residual_count, stale_count, warning_count
     );
     Json(response)
 }
@@ -4096,6 +4311,202 @@ mod api_path_tests {
     }
 }
 
+#[cfg(test)]
+mod diagnose_tests {
+    use super::*;
+
+    #[test]
+    fn test_cli_mode_from_args_default() {
+        let args: Vec<String> = vec!["doramate-localagent".to_string()];
+        let mode = if args.len() > 1 {
+            match args[1].as_str() {
+                "--cleanup" => CliMode::Cleanup,
+                "--diagnose" => CliMode::Diagnose,
+                "--force-kill" => CliMode::ForceKill,
+                _ => CliMode::Normal,
+            }
+        } else {
+            CliMode::Normal
+        };
+        assert_eq!(mode, CliMode::Normal);
+    }
+
+    #[test]
+    fn test_cli_mode_parsing() {
+        let test_cases = vec![
+            (vec!["bin", "--cleanup"], CliMode::Cleanup),
+            (vec!["bin", "--diagnose"], CliMode::Diagnose),
+            (vec!["bin", "--force-kill"], CliMode::ForceKill),
+            (vec!["bin"], CliMode::Normal),
+            (vec!["bin", "unknown"], CliMode::Normal),
+        ];
+        for (args, expected) in test_cases {
+            let mode = if args.len() > 1 {
+                match args[1] {
+                    "--cleanup" => CliMode::Cleanup,
+                    "--diagnose" => CliMode::Diagnose,
+                    "--force-kill" => CliMode::ForceKill,
+                    _ => CliMode::Normal,
+                }
+            } else {
+                CliMode::Normal
+            };
+            assert_eq!(mode, expected, "args={:?}", args);
+        }
+    }
+
+    #[test]
+    fn test_scan_stale_directories_returns_list() {
+        let stale = scan_stale_directories();
+        assert!(stale.iter().all(|d| !d.path.is_empty()));
+    }
+
+    #[test]
+    fn test_startup_warnings_initial_state() {
+        let state = AppState::new();
+        let warnings = state.startup_warnings.lock().unwrap();
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn test_startup_warnings_storage() {
+        let state = AppState::new();
+        {
+            let mut warnings = state.startup_warnings.lock().unwrap();
+            warnings.push("test warning".to_string());
+        }
+        let warnings = state.startup_warnings.lock().unwrap();
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0], "test warning");
+    }
+
+    #[test]
+    fn test_dora_related_process_keywords() {
+        assert!(!DORA_PROCESS_KEYWORDS.is_empty());
+        assert!(DORA_PROCESS_KEYWORDS.contains(&"dora"));
+        assert!(DORA_PROCESS_KEYWORDS.contains(&"doramate"));
+    }
+
+    #[test]
+    fn test_residual_process_info_struct() {
+        let proc = ResidualProcessInfo {
+            pid: 12345,
+            name: "dora.exe".to_string(),
+            is_dora_related: true,
+        };
+        assert_eq!(proc.pid, 12345);
+        assert!(proc.is_dora_related);
+    }
+
+    #[test]
+    fn test_stale_directory_info_struct() {
+        let dir = StaleDirectoryInfo {
+            path: "/tmp/stale".to_string(),
+            age_seconds: 3600,
+        };
+        assert_eq!(dir.age_seconds, 3600);
+        assert!(!dir.path.is_empty());
+    }
+
+    #[test]
+    fn test_diagnose_response_full_structure() {
+        let response = DiagnoseResponse {
+            localagent: LocalAgentStatus {
+                pid: 123,
+                uptime_seconds: 42,
+            },
+            dora_cli: DoraCliStatus {
+                installed: true,
+                version: "0.5.0".to_string(),
+            },
+            port_52100: PortStatus {
+                in_use: false,
+                owning_pid: None,
+                owning_process: None,
+            },
+            dora_ports: DoraPortsInfo {
+                coordinator_54500: false,
+                daemon_54501: false,
+                control_6012: false,
+                all_required_open: false,
+            },
+            residual_processes: vec![ResidualProcessInfo {
+                pid: 999,
+                name: "dora-daemon.exe".to_string(),
+                is_dora_related: true,
+            }],
+            stale_directories: vec![StaleDirectoryInfo {
+                path: "out/".to_string(),
+                age_seconds: 7200,
+            }],
+            startup_warnings: vec!["port in use".to_string()],
+            recommendations: vec!["clean up".to_string()],
+        };
+
+        assert_eq!(response.localagent.pid, 123);
+        assert_eq!(response.dora_cli.version, "0.5.0");
+        assert!(!response.port_52100.in_use);
+        assert_eq!(response.residual_processes.len(), 1);
+        assert_eq!(response.stale_directories.len(), 1);
+        assert_eq!(response.startup_warnings.len(), 1);
+        assert_eq!(response.recommendations.len(), 1);
+        assert!(!response.dora_ports.coordinator_54500);
+        assert!(!response.dora_ports.all_required_open);
+    }
+
+    #[test]
+    fn test_port_status_json_serialization() {
+        let status = PortStatus {
+            in_use: true,
+            owning_pid: Some(12345),
+            owning_process: Some("doramate-localagent.exe".to_string()),
+        };
+        let json = serde_json::to_string(&status).expect("serialize PortStatus");
+        assert!(json.contains("true"));
+        assert!(json.contains("12345"));
+        assert!(json.contains("doramate-localagent.exe"));
+    }
+
+    #[test]
+    fn test_diagnose_response_json_serialization() {
+        let response = DiagnoseResponse {
+            localagent: LocalAgentStatus {
+                pid: 123,
+                uptime_seconds: 42,
+            },
+            dora_cli: DoraCliStatus {
+                installed: false,
+                version: String::new(),
+            },
+            port_52100: PortStatus {
+                in_use: false,
+                owning_pid: None,
+                owning_process: None,
+            },
+            dora_ports: DoraPortsInfo {
+                coordinator_54500: true,
+                daemon_54501: false,
+                control_6012: false,
+                all_required_open: false,
+            },
+            residual_processes: Vec::new(),
+            stale_directories: Vec::new(),
+            startup_warnings: Vec::new(),
+            recommendations: vec!["Dora CLI is not installed or not in PATH.".to_string()],
+        };
+        let json = serde_json::to_string(&response).expect("serialize DiagnoseResponse");
+        assert!(json.contains("localagent"));
+        assert!(json.contains("dora_cli"));
+        assert!(json.contains("port_52100"));
+        assert!(json.contains("dora_ports"));
+        assert!(json.contains("coordinator_54500"));
+        assert!(json.contains("residual_processes"));
+        assert!(json.contains("stale_directories"));
+        assert!(json.contains("startup_warnings"));
+        assert!(json.contains("recommendations"));
+    }
+}
+
 async fn stop_dataflow_by_uuid(uuid: &str) -> Result<String, String> {
     let output = tokio::process::Command::new("dora")
         .args(&[
@@ -4286,6 +4697,440 @@ fn check_dora_coordinator_running() -> bool {
     }
 
     false
+}
+
+const DORA_PROCESS_KEYWORDS: &[&str] = &[
+    "dora",
+    "doramate",
+    "coordinator",
+    "CSharpNode",
+];
+
+/// 扫描系统中所有 Dora 相关进程
+#[cfg(target_os = "windows")]
+fn scan_dora_related_processes() -> Vec<ResidualProcessInfo> {
+    let output = match std::process::Command::new("tasklist")
+        .args(&["/FO", "CSV", "/NH"])
+        .output()
+    {
+        Ok(out) => out,
+        Err(_) => return Vec::new(),
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut processes = Vec::new();
+
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        // Parse CSV: "image.exe","pid","session","session#","mem"
+        let parts: Vec<&str> = line.split(',').collect();
+        if parts.len() < 2 {
+            continue;
+        }
+        let image_name = parts[0].trim_matches('"').to_lowercase();
+        let pid: u32 = parts[1].trim_matches('"').parse().unwrap_or(0);
+        if pid == 0 {
+            continue;
+        }
+
+        let is_dora = DORA_PROCESS_KEYWORDS
+            .iter()
+            .any(|kw| image_name.contains(kw));
+        if !is_dora {
+            continue;
+        }
+
+        // Skip our own process
+        if pid == std::process::id() {
+            continue;
+        }
+
+        processes.push(ResidualProcessInfo {
+            pid,
+            name: image_name,
+            is_dora_related: true,
+        });
+    }
+
+    processes
+}
+
+#[cfg(not(target_os = "windows"))]
+fn scan_dora_related_processes() -> Vec<ResidualProcessInfo> {
+    let output = match std::process::Command::new("ps")
+        .args(&["-eo", "pid,comm"])
+        .output()
+    {
+        Ok(out) => out,
+        Err(_) => return Vec::new(),
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut processes = Vec::new();
+
+    for line in stdout.lines().skip(1) {
+        let parts: Vec<&str> = line.trim().splitn(2, ' ').collect();
+        if parts.len() < 2 {
+            continue;
+        }
+        let pid: u32 = parts[0].parse().unwrap_or(0);
+        let name = parts[1].to_lowercase();
+        if pid == 0 {
+            continue;
+        }
+
+        let is_dora = DORA_PROCESS_KEYWORDS.iter().any(|kw| name.contains(kw));
+        if !is_dora {
+            continue;
+        }
+        if pid == std::process::id() {
+            continue;
+        }
+
+        processes.push(ResidualProcessInfo {
+            pid,
+            name,
+            is_dora_related: true,
+        });
+    }
+
+    processes
+}
+
+/// 检查 port_52100 的占用进程
+#[cfg(target_os = "windows")]
+fn check_port_52100_owner() -> PortStatus {
+    // Use netstat to find which process owns port 52100
+    let output = match std::process::Command::new("netstat")
+        .args(&["-ano", "-p", "tcp"])
+        .output()
+    {
+        Ok(out) => out,
+        Err(_) => {
+            return PortStatus {
+                in_use: is_local_port_open(LOCALAGENT_PORT),
+                owning_pid: None,
+                owning_process: None,
+            }
+        }
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let target = format!(":{}", LOCALAGENT_PORT);
+
+    for line in stdout.lines() {
+        let line = line.trim();
+        if !line.contains(&target) {
+            continue;
+        }
+        // Parse: Proto LocalAddr ForeignAddr State PID
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if let Some(pid_str) = parts.last() {
+            if let Ok(pid) = pid_str.parse::<u32>() {
+                let proc_name = get_process_name_by_pid(pid);
+                return PortStatus {
+                    in_use: true,
+                    owning_pid: Some(pid),
+                    owning_process: proc_name,
+                };
+            }
+        }
+    }
+
+    PortStatus {
+        in_use: is_local_port_open(LOCALAGENT_PORT),
+        owning_pid: None,
+        owning_process: None,
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn check_port_52100_owner() -> PortStatus {
+    let output = match std::process::Command::new("lsof")
+        .args(&["-i", &format!(":{}", LOCALAGENT_PORT), "-P", "-n"])
+        .output()
+    {
+        Ok(out) => out,
+        Err(_) => {
+            return PortStatus {
+                in_use: is_local_port_open(LOCALAGENT_PORT),
+                owning_pid: None,
+                owning_process: None,
+            }
+        }
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines().skip(1) {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 9 {
+            if let Ok(pid) = parts.get(1).unwrap_or(&"").parse::<u32>() {
+                return PortStatus {
+                    in_use: true,
+                    owning_pid: Some(pid),
+                    owning_process: parts.get(0).map(|s| s.to_string()),
+                };
+            }
+        }
+    }
+
+    PortStatus {
+        in_use: is_local_port_open(LOCALAGENT_PORT),
+        owning_pid: None,
+        owning_process: None,
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn get_process_name_by_pid(pid: u32) -> Option<String> {
+    let output = std::process::Command::new("tasklist")
+        .args(&["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+        .output()
+        .ok()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let line = stdout.lines().next()?;
+    let parts: Vec<&str> = line.split(',').collect();
+    if parts.is_empty() {
+        return None;
+    }
+    Some(parts[0].trim_matches('"').to_string())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn get_process_name_by_pid(pid: u32) -> Option<String> {
+    let output = std::process::Command::new("ps")
+        .args(&["-p", &pid.to_string(), "-o", "comm="])
+        .output()
+        .ok()?;
+    let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if name.is_empty() { None } else { Some(name) }
+}
+
+/// 扫描 stale 工作目录（out/, doramate-session-* 等）
+fn scan_stale_directories() -> Vec<StaleDirectoryInfo> {
+    let mut stale = Vec::new();
+    let cwd = match std::env::current_dir() {
+        Ok(dir) => dir,
+        Err(_) => return stale,
+    };
+
+    // 扫描当前目录下的 out/ 目录
+    let out_dir = cwd.join("out");
+    if out_dir.exists() {
+        if let Ok(metadata) = out_dir.metadata() {
+            if let Ok(modified) = metadata.modified() {
+                if let Ok(elapsed) = modified.elapsed() {
+                    stale.push(StaleDirectoryInfo {
+                        path: out_dir.to_string_lossy().to_string(),
+                        age_seconds: elapsed.as_secs(),
+                    });
+                }
+            }
+        }
+    }
+
+    // 扫描类似 doramate_session_* 的目录
+    if let Ok(entries) = std::fs::read_dir(&cwd) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if name.starts_with("doramate_session") || name.starts_with("doramate-session") {
+                if let Ok(metadata) = path.metadata() {
+                    if let Ok(modified) = metadata.modified() {
+                        if let Ok(elapsed) = modified.elapsed() {
+                            stale.push(StaleDirectoryInfo {
+                                path: path.to_string_lossy().to_string(),
+                                age_seconds: elapsed.as_secs(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    stale
+}
+
+/// 构建诊断响应（在 blocking task 中运行以避免阻塞 async 运行时）
+async fn build_diagnose_response(state: &Arc<AppState>) -> DiagnoseResponse {
+    let pid = std::process::id();
+    let uptime_seconds = 0; // 无法从进程外部获取，简化处理
+
+    // 在 blocking task 中执行系统扫描
+    let (residual, port_status, stale_dirs) = tokio::task::spawn_blocking(|| {
+        let r = scan_dora_related_processes();
+        let p = check_port_52100_owner();
+        let s = scan_stale_directories();
+        (r, p, s)
+    })
+    .await
+    .unwrap_or_default();
+
+    let dora_installed = check_dora_installed();
+    let dora_version = if dora_installed {
+        std::process::Command::new("dora")
+            .arg("--version")
+            .output()
+            .ok()
+            .and_then(|out| {
+                let combined = format!(
+                    "{}{}",
+                    String::from_utf8_lossy(&out.stdout),
+                    String::from_utf8_lossy(&out.stderr)
+                );
+                combined
+                    .lines()
+                    .next()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+            })
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    let startup_warnings = state
+        .startup_warnings
+        .lock()
+        .unwrap()
+        .clone();
+
+    // 检查 Dora 内部端口
+    let dora_coordinator_port_open = is_local_port_open(DORA_COORDINATOR_PORT);
+    let dora_daemon_port_open = is_local_port_open(DORA_DAEMON_LOCAL_PORT);
+    let dora_control_port_open = is_local_port_open(DORA_CONTROL_PORT);
+
+    let mut recommendations: Vec<String> = Vec::new();
+    if port_status.in_use && port_status.owning_pid != Some(pid) {
+        recommendations.push(format!(
+            "Port {} is occupied by PID {}. Consider stopping the other process.",
+            LOCALAGENT_PORT,
+            port_status.owning_pid.unwrap_or(0)
+        ));
+    }
+    if dora_coordinator_port_open {
+        recommendations.push(format!(
+            "Dora coordinator port {} is in use (another coordinator may be running).",
+            DORA_COORDINATOR_PORT
+        ));
+    }
+    if dora_daemon_port_open {
+        recommendations.push(format!(
+            "Dora daemon port {} is in use (another daemon may be running).",
+            DORA_DAEMON_LOCAL_PORT
+        ));
+    }
+    if dora_control_port_open {
+        recommendations.push(format!(
+            "Dora control port {} is in use.",
+            DORA_CONTROL_PORT
+        ));
+    }
+    if !residual.is_empty() {
+        recommendations.push(format!(
+            "Found {} Dora-related process(es). Run 'doramate-localagent --cleanup' to clean them.",
+            residual.len()
+        ));
+    }
+    if !stale_dirs.is_empty() {
+        recommendations.push(format!(
+            "Found {} stale working director(ies). Consider cleaning them manually.",
+            stale_dirs.len()
+        ));
+    }
+    if !dora_installed {
+        recommendations.push("Dora CLI is not installed or not in PATH.".to_string());
+    }
+
+    DiagnoseResponse {
+        localagent: LocalAgentStatus {
+            pid,
+            uptime_seconds,
+        },
+        dora_cli: DoraCliStatus {
+            installed: dora_installed,
+            version: dora_version,
+        },
+        port_52100: port_status,
+        dora_ports: DoraPortsInfo {
+            coordinator_54500: dora_coordinator_port_open,
+            daemon_54501: dora_daemon_port_open,
+            control_6012: dora_control_port_open,
+            all_required_open: dora_coordinator_port_open && dora_daemon_port_open && dora_control_port_open,
+        },
+        residual_processes: residual,
+        stale_directories: stale_dirs,
+        startup_warnings,
+        recommendations,
+    }
+}
+
+/// 清理所有 Dora 相关进程（不依赖 YAML 路径）
+#[cfg(target_os = "windows")]
+async fn cleanup_all_residual() -> Vec<String> {
+    let processes = scan_dora_related_processes();
+    let mut cleaned = Vec::new();
+
+    for proc in processes {
+        let image_name = format!("{}.exe", proc.name.trim_end_matches(".exe"));
+        match std::process::Command::new("taskkill")
+            .args(&["/F", "/IM", &image_name])
+            .output()
+        {
+            Ok(out) if out.status.success() => {
+                cleaned.push(proc.name.clone());
+                info!("Cleaned residual process: {} (PID {})", proc.name, proc.pid);
+            }
+            Ok(_) => {
+                warn!("Failed to kill residual process: {} (PID {})", proc.name, proc.pid);
+            }
+            Err(e) => {
+                warn!("Error killing process {} (PID {}): {}", proc.name, proc.pid, e);
+            }
+        }
+    }
+
+    // Also try dora stop --all to clean up any running dataflows
+    match stop_all_dataflows().await {
+        Ok(msg) => info!("Stop all dataflows: {}", msg),
+        Err(e) => warn!("Stop all dataflows failed: {}", e),
+    }
+
+    cleaned
+}
+
+#[cfg(not(target_os = "windows"))]
+async fn cleanup_all_residual() -> Vec<String> {
+    let processes = scan_dora_related_processes();
+    let mut cleaned = Vec::new();
+
+    for proc in processes {
+        match std::process::Command::new("kill")
+            .args(&["-9", &proc.pid.to_string()])
+            .output()
+        {
+            Ok(out) if out.status.success() => {
+                cleaned.push(proc.name.clone());
+                info!("Cleaned residual process: {} (PID {})", proc.name, proc.pid);
+            }
+            _ => {
+                warn!("Failed to kill residual process: {} (PID {})", proc.name, proc.pid);
+            }
+        }
+    }
+
+    cleaned
 }
 
 /// 检查 dora daemon 是否正在运行

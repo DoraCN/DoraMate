@@ -50,6 +50,58 @@ pub struct HealthResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct DiagnoseResponse {
+    pub localagent: DiagnoseLocalAgentStatus,
+    pub dora_cli: DiagnoseDoraCliStatus,
+    pub port_52100: DiagnosePortStatus,
+    pub dora_ports: DiagnoseDoraPortsInfo,
+    pub residual_processes: Vec<DiagnoseResidualProcess>,
+    pub stale_directories: Vec<DiagnoseStaleDirectory>,
+    pub startup_warnings: Vec<String>,
+    pub recommendations: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DiagnoseDoraPortsInfo {
+    pub coordinator_54500: bool,
+    pub daemon_54501: bool,
+    pub control_6012: bool,
+    pub all_required_open: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DiagnoseLocalAgentStatus {
+    pub pid: u32,
+    pub uptime_seconds: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DiagnoseDoraCliStatus {
+    pub installed: bool,
+    pub version: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DiagnosePortStatus {
+    pub in_use: bool,
+    pub owning_pid: Option<u32>,
+    pub owning_process: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DiagnoseResidualProcess {
+    pub pid: u32,
+    pub name: String,
+    pub is_dora_related: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DiagnoseStaleDirectory {
+    pub path: String,
+    pub age_seconds: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SelectDirectoryResponse {
     pub success: bool,
     pub cancelled: bool,
@@ -378,6 +430,10 @@ pub async fn stop_dataflow(process_id: &str) -> Result<StopDataflowResponse, Str
 
 pub async fn health_check() -> Result<HealthResponse, String> {
     fetch_json("GET", "health", None, "health check").await
+}
+
+pub async fn diagnose() -> Result<DiagnoseResponse, String> {
+    fetch_json("GET", "diagnose", None, "diagnose").await
 }
 
 pub async fn select_directory() -> Result<SelectDirectoryResponse, String> {
