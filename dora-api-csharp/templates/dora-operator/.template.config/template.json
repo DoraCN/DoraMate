@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "DoraMate",
+  "classifications": ["Dora", "Dataflow", "Operator"],
+  "identity": "DoraMate.DoraOperator.Template",
+  "name": "Dora Operator (C# / NativeAOT)",
+  "shortName": "dora-operator",
+  "description": "A minimal C# NativeAOT Dora operator that processes input events and emits output.",
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "sourceName": "CSharpOperator",
+  "preferNameDirectory": true,
+  "symbols": {
+    "OperatorName": {
+      "type": "parameter",
+      "datatype": "string",
+      "replaces": "MyOperator",
+      "displayName": "Operator class name",
+      "description": "The name of the operator class and its file.",
+      "defaultValue": "MyOperator"
+    },
+    "TargetFramework": {
+      "type": "parameter",
+      "datatype": "string",
+      "replaces": "net8.0",
+      "displayName": "Target framework",
+      "description": "The .NET target framework moniker.",
+      "defaultValue": "net8.0",
+      "choices": [
+        { "choice": "net8.0", "description": ".NET 8.0" },
+        { "choice": "net9.0", "description": ".NET 9.0" }
+      ]
+    }
+  }
+}

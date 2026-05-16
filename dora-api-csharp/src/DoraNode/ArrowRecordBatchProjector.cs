@@ -381,6 +381,48 @@ public sealed class ArrowRecordBatchRowAccessor
         _projector.TryGetDecimal256(RowIndex, fieldName, expectedPrecision, expectedScale, out value, out error);
 
     /// <summary>
+    /// Reads a non-null Int64 field value from the current record-batch row.
+    /// </summary>
+    public bool TryGetInt64(string fieldName, out long value, out string? error) =>
+        _projector.TryGetInt64(RowIndex, fieldName, out value, out error);
+
+    /// <summary>
+    /// Reads a non-null Boolean field value from the current record-batch row.
+    /// </summary>
+    public bool TryGetBoolean(string fieldName, out bool value, out string? error) =>
+        _projector.TryGetBoolean(RowIndex, fieldName, out value, out error);
+
+    /// <summary>
+    /// Reads a non-null Float field value from the current record-batch row.
+    /// </summary>
+    public bool TryGetFloat(string fieldName, out float value, out string? error) =>
+        _projector.TryGetFloat(RowIndex, fieldName, out value, out error);
+
+    /// <summary>
+    /// Reads a non-null Double field value from the current record-batch row.
+    /// </summary>
+    public bool TryGetDouble(string fieldName, out double value, out string? error) =>
+        _projector.TryGetDouble(RowIndex, fieldName, out value, out error);
+
+    /// <summary>
+    /// Reads a non-null Binary field value from the current record-batch row.
+    /// </summary>
+    public bool TryGetBinary(string fieldName, out byte[] value, out string? error) =>
+        _projector.TryGetBinary(RowIndex, fieldName, out value, out error);
+
+    /// <summary>
+    /// Reads a non-null Date32 field value from the current record-batch row.
+    /// </summary>
+    public bool TryGetDate32(string fieldName, DateUnit expectedUnit, out DateOnly value, out string? error) =>
+        _projector.TryGetDate32(RowIndex, fieldName, expectedUnit, out value, out error);
+
+    /// <summary>
+    /// Reads a non-null Timestamp field value from the current record-batch row.
+    /// </summary>
+    public bool TryGetTimestamp(string fieldName, TimeUnit expectedUnit, string? expectedTimezone, out DateTimeOffset value, out string? error) =>
+        _projector.TryGetTimestamp(RowIndex, fieldName, expectedUnit, expectedTimezone, out value, out error);
+
+    /// <summary>
     /// Reads a List&lt;String&gt; field value from the current record-batch row.
     /// </summary>
     public bool TryGetStringList(string fieldName, out IReadOnlyList<string> values, out string? error) =>
@@ -489,6 +531,193 @@ internal sealed class ArrowRecordBatchColumnProjector
         if (actual is null)
         {
             error = $"Expected Int32 column '{fieldName}' value at row {rowIndex} to be non-null.";
+            return false;
+        }
+
+        value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetInt64(int rowIndex, string fieldName, out long value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedColumn(fieldName, ArrowTypeId.Int64, out Int64Array? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, fieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        var actual = column.GetValue(rowIndex);
+        if (actual is null)
+        {
+            error = $"Expected Int64 column '{fieldName}' value at row {rowIndex} to be non-null.";
+            return false;
+        }
+
+        value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetBoolean(int rowIndex, string fieldName, out bool value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedColumn(fieldName, ArrowTypeId.Boolean, out BooleanArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, fieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        var actual = column.GetValue(rowIndex);
+        if (actual is null)
+        {
+            error = $"Expected Boolean column '{fieldName}' value at row {rowIndex} to be non-null.";
+            return false;
+        }
+
+        value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetFloat(int rowIndex, string fieldName, out float value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedColumn(fieldName, ArrowTypeId.Float, out FloatArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, fieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        var actual = column.GetValue(rowIndex);
+        if (actual is null)
+        {
+            error = $"Expected Float column '{fieldName}' value at row {rowIndex} to be non-null.";
+            return false;
+        }
+
+        value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetDouble(int rowIndex, string fieldName, out double value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedColumn(fieldName, ArrowTypeId.Double, out DoubleArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, fieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        var actual = column.GetValue(rowIndex);
+        if (actual is null)
+        {
+            error = $"Expected Double column '{fieldName}' value at row {rowIndex} to be non-null.";
+            return false;
+        }
+
+        value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetBinary(int rowIndex, string fieldName, out byte[] value, out string? error)
+    {
+        value = System.Array.Empty<byte>();
+        if (!TryGetTypedColumn(fieldName, ArrowTypeId.Binary, out BinaryArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, fieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        value = column.GetBytes(rowIndex).ToArray();
+        error = null;
+        return true;
+    }
+
+    public bool TryGetDate32(int rowIndex, string fieldName, DateUnit expectedUnit, out DateOnly value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedColumn(fieldName, ArrowTypeId.Date32, out Date32Array? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (column.Data.DataType is not Date32Type dateType || dateType.Unit != expectedUnit)
+        {
+            var actualUnit = column.Data.DataType is Date32Type actualType ? actualType.Unit.ToString() : column.Data.DataType.Name;
+            error = $"Expected column '{fieldName}' to use Date32({expectedUnit}) but got {actualUnit}.";
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, fieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        var actual = column.GetDateOnly(rowIndex);
+        if (actual is null)
+        {
+            error = $"Expected Date32 column '{fieldName}' value at row {rowIndex} to be non-null.";
+            return false;
+        }
+
+        value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetTimestamp(int rowIndex, string fieldName, TimeUnit expectedUnit, string? expectedTimezone, out DateTimeOffset value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedColumn(fieldName, ArrowTypeId.Timestamp, out TimestampArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (column.Data.DataType is not TimestampType timestampType)
+        {
+            error = $"Expected column '{fieldName}' to be materialized as TimestampType but got {column.Data.DataType.Name}.";
+            return false;
+        }
+
+        if (timestampType.Unit != expectedUnit || !string.Equals(timestampType.Timezone, expectedTimezone, StringComparison.Ordinal))
+        {
+            error = $"Expected column '{fieldName}' to use Timestamp({expectedUnit}, {(expectedTimezone ?? "<null>")}) but got Timestamp({timestampType.Unit}, {(timestampType.Timezone ?? "<null>")}).";
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, fieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        var actual = column.GetTimestamp(rowIndex);
+        if (actual is null)
+        {
+            error = $"Expected Timestamp column '{fieldName}' value at row {rowIndex} to be non-null.";
             return false;
         }
 
@@ -773,6 +1002,48 @@ public sealed class ArrowStructRowAccessor
         _projector.TryGetDecimal256(RowIndex, childFieldName, expectedPrecision, expectedScale, out value, out error);
 
     /// <summary>
+    /// Reads a non-null Int64 child value from the current struct row.
+    /// </summary>
+    public bool TryGetInt64(string childFieldName, out long value, out string? error) =>
+        _projector.TryGetInt64(RowIndex, childFieldName, out value, out error);
+
+    /// <summary>
+    /// Reads a non-null Boolean child value from the current struct row.
+    /// </summary>
+    public bool TryGetBoolean(string childFieldName, out bool value, out string? error) =>
+        _projector.TryGetBoolean(RowIndex, childFieldName, out value, out error);
+
+    /// <summary>
+    /// Reads a non-null Float child value from the current struct row.
+    /// </summary>
+    public bool TryGetFloat(string childFieldName, out float value, out string? error) =>
+        _projector.TryGetFloat(RowIndex, childFieldName, out value, out error);
+
+    /// <summary>
+    /// Reads a non-null Double child value from the current struct row.
+    /// </summary>
+    public bool TryGetDouble(string childFieldName, out double value, out string? error) =>
+        _projector.TryGetDouble(RowIndex, childFieldName, out value, out error);
+
+    /// <summary>
+    /// Reads a non-null Binary child value from the current struct row.
+    /// </summary>
+    public bool TryGetBinary(string childFieldName, out byte[] value, out string? error) =>
+        _projector.TryGetBinary(RowIndex, childFieldName, out value, out error);
+
+    /// <summary>
+    /// Reads a non-null Date32 child value from the current struct row.
+    /// </summary>
+    public bool TryGetDate32(string childFieldName, DateUnit expectedUnit, out DateOnly value, out string? error) =>
+        _projector.TryGetDate32(RowIndex, childFieldName, expectedUnit, out value, out error);
+
+    /// <summary>
+    /// Reads a non-null Timestamp child value from the current struct row.
+    /// </summary>
+    public bool TryGetTimestamp(string childFieldName, TimeUnit expectedUnit, string? expectedTimezone, out DateTimeOffset value, out string? error) =>
+        _projector.TryGetTimestamp(RowIndex, childFieldName, expectedUnit, expectedTimezone, out value, out error);
+
+    /// <summary>
     /// Reads a List&lt;String&gt; child value from the current struct row.
     /// </summary>
     public bool TryGetStringList(string childFieldName, out IReadOnlyList<string> values, out string? error) =>
@@ -884,6 +1155,193 @@ internal sealed class ArrowStructColumnProjector
         }
 
         var actual = column.GetValue(rowIndex);
+        if (actual is null)
+        {
+            error = $"Expected struct field '{_fieldName}.{childFieldName}' value at row {rowIndex} to be non-null.";
+            return false;
+        }
+
+        value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetInt64(int rowIndex, string childFieldName, out long value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedChildColumn(childFieldName, ArrowTypeId.Int64, out Int64Array? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, childFieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        var actual = column.GetValue(rowIndex);
+        if (actual is null)
+        {
+            error = $"Expected struct field '{_fieldName}.{childFieldName}' value at row {rowIndex} to be non-null.";
+            return false;
+        }
+
+        value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetBoolean(int rowIndex, string childFieldName, out bool value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedChildColumn(childFieldName, ArrowTypeId.Boolean, out BooleanArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, childFieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        var actual = column.GetValue(rowIndex);
+        if (actual is null)
+        {
+            error = $"Expected struct field '{_fieldName}.{childFieldName}' value at row {rowIndex} to be non-null.";
+            return false;
+        }
+
+        value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetFloat(int rowIndex, string childFieldName, out float value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedChildColumn(childFieldName, ArrowTypeId.Float, out FloatArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, childFieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        var actual = column.GetValue(rowIndex);
+        if (actual is null)
+        {
+            error = $"Expected struct field '{_fieldName}.{childFieldName}' value at row {rowIndex} to be non-null.";
+            return false;
+        }
+
+        value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetDouble(int rowIndex, string childFieldName, out double value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedChildColumn(childFieldName, ArrowTypeId.Double, out DoubleArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, childFieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        var actual = column.GetValue(rowIndex);
+        if (actual is null)
+        {
+            error = $"Expected struct field '{_fieldName}.{childFieldName}' value at row {rowIndex} to be non-null.";
+            return false;
+        }
+
+        value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetBinary(int rowIndex, string childFieldName, out byte[] value, out string? error)
+    {
+        value = System.Array.Empty<byte>();
+        if (!TryGetTypedChildColumn(childFieldName, ArrowTypeId.Binary, out BinaryArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, childFieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        value = column.GetBytes(rowIndex).ToArray();
+        error = null;
+        return true;
+    }
+
+    public bool TryGetDate32(int rowIndex, string childFieldName, DateUnit expectedUnit, out DateOnly value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedChildColumn(childFieldName, ArrowTypeId.Date32, out Date32Array? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (column.Data.DataType is not Date32Type dateType || dateType.Unit != expectedUnit)
+        {
+            var actualUnit = column.Data.DataType is Date32Type actualType ? actualType.Unit.ToString() : column.Data.DataType.Name;
+            error = $"Expected struct field '{_fieldName}.{childFieldName}' to use Date32({expectedUnit}) but got {actualUnit}.";
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, childFieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        var actual = column.GetDateOnly(rowIndex);
+        if (actual is null)
+        {
+            error = $"Expected struct field '{_fieldName}.{childFieldName}' value at row {rowIndex} to be non-null.";
+            return false;
+        }
+
+        value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetTimestamp(int rowIndex, string childFieldName, TimeUnit expectedUnit, string? expectedTimezone, out DateTimeOffset value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedChildColumn(childFieldName, ArrowTypeId.Timestamp, out TimestampArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (column.Data.DataType is not TimestampType timestampType)
+        {
+            error = $"Expected struct field '{_fieldName}.{childFieldName}' to be materialized as TimestampType but got {column.Data.DataType.Name}.";
+            return false;
+        }
+
+        if (timestampType.Unit != expectedUnit || !string.Equals(timestampType.Timezone, expectedTimezone, StringComparison.Ordinal))
+        {
+            error = $"Expected struct field '{_fieldName}.{childFieldName}' to use Timestamp({expectedUnit}, {(expectedTimezone ?? "<null>")}) but got Timestamp({timestampType.Unit}, {(timestampType.Timezone ?? "<null>")}).";
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, childFieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        var actual = column.GetTimestamp(rowIndex);
         if (actual is null)
         {
             error = $"Expected struct field '{_fieldName}.{childFieldName}' value at row {rowIndex} to be non-null.";

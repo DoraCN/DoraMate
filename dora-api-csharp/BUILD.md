@@ -246,6 +246,87 @@ dotnet build ./dora-api-csharp.sln -c Release
 2. 是否使用了 `dotnet publish -c Release`
 3. 是否错误地把 Operator 当作普通托管插件 DLL
 
+## 5. 模板（dotnet new）
+
+仓库内置了两个 `dotnet new` 模板，用于快速创建 C# Dora node / operator 项目：
+
+| 模板名         | 说明                                               |
+|----------------|----------------------------------------------------|
+| `dora-node`    | 最小 C# Dora node，同步读事件循环 + 输出           |
+| `dora-operator`| 最小 C# NativeAOT Dora operator，演示 Init/OnInput |
+
+模板内容在 `templates/` 目录下管理，但不参与主 solution 的编译构建（仅打包为 NuGet 模板包）。
+
+### 构建与安装
+
+```powershell
+pwsh ./scripts/build-templates.ps1
+```
+
+该脚本会：
+
+1. `dotnet pack` 生成 `artifacts/templates/DoraMate.Templates.*.nupkg`
+2. `dotnet new install` 将模板注册到当前 .NET SDK
+
+### 使用
+
+安装后即可创建新项目：
+
+```powershell
+# 创建 Dora node 项目
+dotnet new dora-node -n MyCustomNode
+cd MyCustomNode
+dotnet build
+
+# 创建 Dora operator 项目
+dotnet new dora-operator -n MyCustomOp
+cd MyCustomOp
+dotnet publish -c Release
+```
+
+### 本地开发 / 离线测试
+
+模板依赖 `DoraNode` / `DoraOperator` NuGet 包。在正式发布到 nuget.org 之前，可在本地打包并测试：
+
+```powershell
+# 1. 构建核心库并打包为 NuGet
+dotnet pack src/DoraNode/DoraNode.csproj -c Release -o artifacts/packages
+dotnet pack src/DoraOperator/DoraOperator.csproj -c Release -o artifacts/packages
+
+# 2. 构建并安装模板（会自动从 artifacts/packages 找到本地包）
+pwsh ./scripts/build-templates.ps1
+
+# 3. 创建测试项目
+dotnet new dora-node -n TestNode
+cd TestNode
+dotnet restore    # 从本地源 + nuget.org 解析依赖
+dotnet build
+```
+
+仓库已内置 `nuget.config`，自动包含 `artifacts/packages` 作为本地源。
+
+### 卸载
+
+```powershell
+dotnet new uninstall DoraMate.Templates
+```
+
+### 模板参数
+
+**dora-node:**
+
+| 参数               | 默认值       | 说明                            |
+|--------------------|--------------|---------------------------------|
+| `--NodeName`       | `MyDoraNode` | Entry-point class / namespace   |
+| `--TargetFramework`| `net8.0`     | 目标框架 (`net8.0` / `net9.0`)  |
+
+**dora-operator:**
+
+| 参数               | 默认值        | 说明                            |
+|--------------------|---------------|---------------------------------|
+| `--OperatorName`   | `MyOperator`  | Operator 类名和文件名           |
+| `--TargetFramework`| `net8.0`      | 目标框架 (`net8.0` / `net9.0`)  |
+
 ## 当前推荐开发工作流
 
 1. 修改 `src/DoraNode` / `src/DoraOperator`

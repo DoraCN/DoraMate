@@ -170,6 +170,30 @@ pub struct NodeTemplateConfigEntry {
     pub outputs: Option<Vec<String>>,
 }
 
+/// Returns the list of built-in C# templates for the frontend template palette.
+pub fn builtin_csharp_templates() -> Vec<NodeTemplateConfigEntry> {
+    vec![
+        NodeTemplateConfigEntry {
+            node_type: "csharp-simple-node".into(),
+            name: "C# Simple Node".into(),
+            description: "A simple C# Dora node with event handling".into(),
+            icon: String::new(),
+            path: None,
+            inputs: Some(vec!["input".into()]),
+            outputs: Some(vec!["output".into()]),
+        },
+        NodeTemplateConfigEntry {
+            node_type: "csharp-operator".into(),
+            name: "C# Operator (NativeAOT)".into(),
+            description: "A C# Dora operator using NativeAOT".into(),
+            icon: String::new(),
+            path: None,
+            inputs: Some(vec!["input".into()]),
+            outputs: Some(vec!["output".into()]),
+        },
+    ]
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SaveNodeTemplatesConfigRequest {
     #[serde(default)]

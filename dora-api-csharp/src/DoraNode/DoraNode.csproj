@@ -5,10 +5,42 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <Version>0.1.0</Version>
-    <Description>Dora Node C# binding (standalone reimplementation)</Description>
+
+    <!-- NuGet package metadata -->
+    <PackageId>DoraMate.DoraNode</PackageId>
+    <Version>0.2.0</Version>
+    <Authors>DoraMate Contributors</Authors>
+    <Description>Dora Node C# binding — write standalone Dora nodes in C# with synchronous/async event reading and Arrow RecordBatch support.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/dora-rs/dora</PackageProjectUrl>
+    <PackageTags>dora;dataflow;robotics;node;arrow</PackageTags>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+
     <BaseOutputPath>..\..\artifacts\dotnet\DoraNode\</BaseOutputPath>
   </PropertyGroup>
+
+  <!-- Platform-specific native library references -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <Content Include="..\..\artifacts\native\win-x64\dora_node_api_c.dll">
+      <PackagePath>runtimes/win-x64/native/dora_node_api_c.dll</PackagePath>
+      <Pack>true</Pack>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <Content Include="..\..\artifacts\native\linux-x64\libdora_node_api_c.so">
+      <PackagePath>runtimes/linux-x64/native/libdora_node_api_c.so</PackagePath>
+      <Pack>true</Pack>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <Content Include="..\..\artifacts\native\osx-x64\libdora_node_api_c.dylib">
+      <PackagePath>runtimes/osx-x64/native/libdora_node_api_c.dylib</PackagePath>
+      <Pack>true</Pack>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Apache.Arrow" Version="22.1.0" />

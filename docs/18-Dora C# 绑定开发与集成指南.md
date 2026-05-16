@@ -106,6 +106,17 @@ Node 与 Operator 两侧都已经补齐 Arrow 相关 helper，包括：
 
 这不是一个只有 bytes/string 的最小绑定，而是已经支持结构化 Arrow 数据面的绑定。
 
+### 4.5 C# 模板产品化能力
+
+除了 SDK 和示例外，当前仓库已具备完整的 C# 模板产品化能力：
+
+- 两个 SDK 已配置 NuGet 包元数据，可通过 `dotnet pack` 生成 `DoraMate.DoraNode` 和 `DoraMate.DoraOperator` 的 `.nupkg`
+- 两个 `dotnet new` 模板（`dora-node` / `dora-operator`）可从本地路径或模板包安装，3 步创建新项目
+- 模板包 `DoraMate.Templates` 可独立分发，通过 NuGet 安装到任意 .NET SDK
+- 前端 `api.rs` 已注册 C# 模板条目，供 DoraMate "添加节点" 面板使用
+
+这意味着当前仓库已经可以支持 "NuGet 包 + dotnet new 模板 + 前端模板库" 三种交付形态。
+
 ### 4.4 验证与回归能力
 
 当前仓库不只提供 API，也已经形成了可重复验证的基线：
@@ -185,8 +196,14 @@ Node 与 Operator 两侧都已经补齐 Arrow 相关 helper，包括：
   - 构建 native C ABI 并复制到统一输出目录
 - `rebuild-csharp-operators.ps1`
   - 统一重建 NativeAOT operator 示例
+- `package-nuget.ps1`
+  - 打包 DoraNode / DoraOperator SDK 为 NuGet 包到 `artifacts/nuget/`
+- `build-templates.ps1`
+  - 构建模板包 `DoraMate.Templates.*.nupkg` 并安装到 dotnet new
+- `install-templates.ps1`
+  - 从本地 `templates/` 目录直接安装模板到 dotnet new（无需打包）
 - `smoke-csharp-bindings.ps1`
-  - 全量 smoke 入口
+  - 全量 smoke 入口（含模板验证步骤）
 - `test-doranode-regression.ps1`
   - node 侧回归
 - `test-doraoperator-regression.ps1`
@@ -225,6 +242,19 @@ Node 与 Operator 两侧都已经补齐 Arrow 相关 helper，包括：
 - 为当前绑定仓库提供稳定的 native ABI 来源
 
 它不是前端依赖目录，也不是让日常绑定逻辑直接改造的地方。
+
+### 5.7 `templates/`
+
+`templates/` 是 dotnet new 模板目录，包含两个可安装的模板：
+
+- `templates/DoraMate.Templates.csproj`
+  - 模板包项目，`PackageType=Template`，内容仅打包
+- `templates/dora-node/`
+  - `dora-node` 模板：最小 C# Dora node 项目
+- `templates/dora-operator/`
+  - `dora-operator` 模板：最小 C# NativeAOT operator 项目
+
+模板不参与主 solution 的编译，仅作为 NuGet 模板包或本地路径安装到 dotnet new SDK。安装后可通过 `dotnet new dora-node` / `dotnet new dora-operator` 创建新项目。
 
 ---
 
@@ -368,6 +398,28 @@ public static class MyOperatorExports
 
 这部分更重要，但不适合作为第一站，因为它讨论的是边界和错误，而不是最小 happy path。
 
+### 7.4 第四阶段：使用 dotnet new 模板快速创建项目
+
+在熟悉了基础开发模型后，可以使用仓库内置的模板快速创建新项目：
+
+```powershell
+# 安装模板（二选一）
+pwsh ./scripts/build-templates.ps1          # 通过模板包安装
+pwsh ./scripts/install-templates.ps1        # 从本地目录安装
+
+# 创建 C# node 项目
+dotnet new dora-node -n MyCustomNode
+cd MyCustomNode
+dotnet build
+
+# 创建 C# operator 项目
+dotnet new dora-operator -n MyCustomOp
+cd MyCustomOp
+dotnet publish -c Release
+```
+
+模板提供了 `--NodeName` / `--OperatorName` 和 `--TargetFramework` 参数用于定制。
+
 ---
 
 ## 8. 推荐构建与验证顺序
@@ -402,6 +454,23 @@ pwsh ./scripts/smoke-csharp-bindings.ps1
 2. 生成 C ABI 动态库
 3. 统一编译 C# 核心库、sample 和 regression runner
 4. 验证真实运行链路
+
+如果需要验证模板：
+
+```powershell
+pwsh ./scripts/build-templates.ps1           # 构建 + 安装模板包
+dotnet new dora-node -n TestNode             # 创建测试项目
+dotnet build ./TestNode/TestNode.csproj      # 构建验证
+```
+
+如果需要为本地开发打包 NuGet：
+
+```powershell
+dotnet pack ./src/DoraNode/DoraNode.csproj -c Release -o artifacts/packages
+dotnet pack ./src/DoraOperator/DoraOperator.csproj -c Release -o artifacts/packages
+```
+
+模板通过 `nuget.config` 中配置的本地源 `artifacts/packages` 自动解析依赖。
 
 ### 8.3 为什么不能只看 `dotnet build`
 
@@ -624,9 +693,19 @@ dora run ./samples/csharp-async-node-dataflow/dataflow.yml
 - DoraMate 前端负责让用户在画布里表达 C# 节点
 - `dora-api-csharp` 负责让这种节点在技术上可被实现和验证
 
-### 12.2 为后续模板体系提供参考工程
+### 12.2 模板产品化集成
 
-当前 `samples/` 目录里的最小 node、operator、Arrow、async 示例，都很适合作为未来 DoraMate 节点模板、示例项目或开发脚手架的来源。
+当前仓库已内置 `dotnet new` 模板（`dora-node` / `dora-operator`），开发者可通过 3 步创建新的 C# 节点项目：
+
+```powershell
+dotnet new dora-node -n MyAnalysisNode
+cd MyAnalysisNode
+dotnet build
+```
+
+同时，前端 `doramate-frontend/src/utils/api.rs` 中已注册 `builtin_csharp_templates()` 函数，返回两个 C# 模板配置条目（`csharp-simple-node` / `csharp-operator`），供 DoraMate "添加节点" 面板使用。这意味着 DoraMate 前端可以在可视化编辑界面中将 C# 节点模板作为可选节点类型之一呈现给用户。
+
+此外，`samples/` 目录里的最小 node、operator、Arrow、async 示例，也很适合作为开发者进一步定制时的参考工程。
 
 ### 12.3 为本地执行链路提供语言扩展面
 
@@ -711,7 +790,193 @@ Node 可以作为普通 C# 可执行程序理解；Operator 则涉及：
 
 ---
 
-## 16. 参考文件
+## 16. C# 模板产品化
+
+当前仓库已将 C# SDK 从 "源码引用 + 示例项目" 升级为 "NuGet 包 + dotnet new 模板 + 前端模板库" 三种交付形态。本节详细说明模板产品化的实现内容和使用方式。
+
+### 16.1 NuGet SDK 打包
+
+两个核心 SDK 项目已配置完整的 NuGet 包元数据：
+
+**DoraNode** (`src/DoraNode/DoraNode.csproj`)
+
+- PackageId: `DoraMate.DoraNode`
+- Version: `0.2.0`
+- 同步/异步事件读取（`Next()` / `NextAsync()`）
+- Arrow RecordBatch 全类型读写（15+ 投影方法）
+- 跨平台原生库嵌入（win-x64 / linux-x64 / osx-x64）
+
+**DoraOperator** (`src/DoraOperator/DoraOperator.csproj`)
+
+- PackageId: `DoraMate.DoraOperator`
+- Version: `0.2.0`
+- NativeAOT operator 生命周期（`Init` / `OnInput` / `OnInputClosed` / `OnError` / `Drop`）
+- Arrow RecordBatch 契约式验证（`IArrowRecordBatchContract<TModel>`）
+- 回归测试工具集
+
+打包脚本 `scripts/package-nuget.ps1`：
+
+```powershell
+dotnet pack src/DoraNode/DoraNode.csproj -c Release -o artifacts/nuget/ `
+  -p:Authors="DoraMate" -p:RepositoryUrl=https://github.com/dora-rs/doramate
+dotnet pack src/DoraOperator/DoraOperator.csproj -c Release -o artifacts/nuget/ `
+  -p:Authors="DoraMate" -p:RepositoryUrl=https://github.com/dora-rs/doramate
+```
+
+### 16.2 dotnet new 模板
+
+两个模板位于 `templates/` 目录，均可从本地路径安装或打包为 NuGet 模板包。
+
+#### dora-node 模板
+
+```text
+templates/dora-node/
+├── .template.config/template.json    # 身份标识：DoraMate.DoraNode.Template
+├── CSharpNode.csproj                 # sourceName: CSharpNode → <Project>.csproj
+└── CSharpNode.cs                     # 使用真实 SDK API 的同步事件循环
+```
+
+模板参数：
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--NodeName` | `MyDoraNode` | Entry-point class / namespace |
+| `--TargetFramework` | `net8.0` | 目标框架（`net8.0` / `net9.0`） |
+
+使用示例：
+
+```csharp
+// CSharpNode.cs 核心代码
+using DoraNode;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        using var node = new DoraNode.DoraNode();
+        while (true)
+        {
+            using var ev = node.Next();
+            if (ev is null) break;
+            // 处理事件、发送输出...
+        }
+    }
+}
+```
+
+#### dora-operator 模板
+
+```text
+templates/dora-operator/
+├── .template.config/template.json    # 身份标识：DoraMate.DoraOperator.Template
+├── CSharpOperator.csproj             # NativeAOT 发布配置
+├── CSharpOperator.cs                 # Operator 业务逻辑
+└── NativeExports.cs                  # UnmanagedCallersOnly 入口点
+```
+
+模板参数：
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--OperatorName` | `MyOperator` | Operator 类名和文件名 |
+| `--TargetFramework` | `net8.0` | 目标框架（`net8.0` / `net9.0`） |
+
+`NativeExports.cs` 包含三个导出入口，将 operator 暴露为 C ABI：
+
+- `dora_init_operator` → `OperatorEntrypoint<MyOperator>.InitOperator()`
+- `dora_drop_operator` → `OperatorEntrypoint<MyOperator>.DropOperator()`
+- `dora_on_event` → `OperatorEntrypoint<MyOperator>.OnEvent()`
+
+### 16.3 模板包 (Template Pack)
+
+`templates/DoraMate.Templates.csproj` 是一个内容仅打包的项目（`PackageType=Template`），将两个模板目录打包为 NuGet 模板包。
+
+构建脚本 `scripts/build-templates.ps1`：
+
+1. `dotnet pack` → 生成 `DoraMate.Templates.*.nupkg` 到 `artifacts/templates/`
+2. `dotnet new install` → 将模板注册到当前 .NET SDK
+3. 完成后可通过 `dotnet new dora-node` / `dotnet new dora-operator` 调用
+
+轻量安装脚本 `scripts/install-templates.ps1` 提供无需打包的直接安装方式：
+
+```powershell
+dotnet new install ./templates/dora-node/
+dotnet new install ./templates/dora-operator/
+dotnet new list | Select-String dora
+```
+
+### 16.4 Smoke 验证
+
+`scripts/smoke-csharp-bindings.ps1` 包含模板验证步骤：
+
+1. 检查模板是否已安装，未安装则自动安装
+2. 创建 `dotnet new dora-node -n TestSmokeNode` 项目并 `dotnet build`
+3. 创建 `dotnet new dora-operator -n TestSmokeOp` 项目并验证创建成功
+
+### 16.5 前端模板库集成
+
+在 `doramate-frontend/src/utils/api.rs` 中新增了 `builtin_csharp_templates()` 函数：
+
+```rust
+pub fn builtin_csharp_templates() -> Vec<NodeTemplateConfigEntry> {
+    vec![
+        NodeTemplateConfigEntry {
+            node_type: "csharp-simple-node".into(),
+            name: "C# Simple Node".into(),
+            description: "A simple C# Dora node with event handling".into(),
+            icon: String::new(), path: None,
+            inputs: Some(vec!["input".into()]),
+            outputs: Some(vec!["output".into()]),
+        },
+        NodeTemplateConfigEntry {
+            node_type: "csharp-operator".into(),
+            name: "C# Operator (NativeAOT)".into(),
+            description: "A C# Dora operator using NativeAOT".into(),
+            icon: String::new(), path: None,
+            inputs: Some(vec!["input".into()]),
+            outputs: Some(vec!["output".into()]),
+        },
+    ]
+}
+```
+
+该函数返回两个 C# 模板配置条目，供前端 "添加节点" 面板使用。DoraMate 前端可以在可视化编辑界面中将 C# 节点模板作为可选节点类型之一呈现给用户。
+
+### 16.6 版本协调
+
+NuGet 版本号与 LocalAgent / 前端统一协调：
+
+| 组件 | 版本 |
+|-------|-------|
+| DoraMate.DoraNode | 0.2.0 |
+| DoraMate.DoraOperator | 0.2.0 |
+| DoraMate.Templates | 0.2.0 |
+| doramate-localagent | 0.2.0 |
+| doramate-frontend | 0.2.0 |
+
+### 16.7 本地开发流程
+
+```powershell
+# 1. 构建原生库
+pwsh ./scripts/build-native.ps1
+
+# 2. 打包 SDK 到本地 NuGet 源
+dotnet pack src/DoraNode/DoraNode.csproj -c Release -o artifacts/packages
+dotnet pack src/DoraOperator/DoraOperator.csproj -c Release -o artifacts/packages
+
+# 3. 安装模板
+pwsh ./scripts/build-templates.ps1
+
+# 4. 创建节点项目
+dotnet new dora-node -n MyAnalysisNode
+cd MyAnalysisNode
+dotnet restore   # 从本地源 + nuget.org 解析依赖
+dotnet build
+```
+
+仓库已内置 `nuget.config`，自动包含 `artifacts/packages` 作为本地源。
+
+## 17. 参考文件
 
 - `dora-api-csharp/README.md`
 - `dora-api-csharp/QUICKSTART.md`
@@ -731,5 +996,6 @@ Node 可以作为普通 C# 可执行程序理解；Operator 则涉及：
 
 ---
 
-最后更新: 2026-03-31  
-状态: 基于当前仓库程序内容与文档整理
+最后更新: 2026-05-13  
+状态: 基于当前仓库程序内容与文档整理  
+包含 C# 模板产品化内容（Section 16）
