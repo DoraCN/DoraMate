@@ -55,7 +55,8 @@ jobs:
         run: dotnet build CSharpNode.csproj -c Release -p:NuGetAudit=false
 
       - name: Build LocalAgent
-        run: cargo build -p doramate-localagent
+        working-directory: ./doramate-localagent
+        run: cargo build --bin doramate-localagent
 
       - name: Run E2E test suite (all scenarios)
         run: |
