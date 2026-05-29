@@ -348,6 +348,16 @@ $summary = [ordered]@{
     }
     recommendations = $recommendations
     parse_errors    = @($parseErrors)
+    gate_green_readiness = [ordered]@{
+        assessed_at                    = (Get-Date).ToString("o")
+        consecutive_passes_needed      = 3
+        consecutive_passes_achieved    = 0
+        latest_standard_passed         = $false
+        standard_rounds                = 50
+        standard_runs_completed        = 0
+        all_thresholds_strict          = $true
+        ready_for_release              = $false
+    }
 }
 
 $summary | ConvertTo-Json -Depth 10 | Set-Content -Path $summaryPath -Encoding UTF8
@@ -402,6 +412,20 @@ $markdown += "- Multi-dataflow: $($summary.recommendations.multi_dataflow.recomm
 $markdown += "- Multi-dataflow rationale: $($summary.recommendations.multi_dataflow.reason)"
 $markdown += "- Next sample-size step: $($summary.recommendations.sample_size_next_step.reason)"
 $markdown += "- Failure interpretation: $($summary.recommendations.current_failures_interpretation.reason)"
+$markdown += ""
+$markdown += "## Gate-Green Readiness"
+$markdown += ""
+$markdown += "- Consecutive passes achieved: $($summary.gate_green_readiness.consecutive_passes_achieved)/$($summary.gate_green_readiness.consecutive_passes_needed) required"
+$markdown += "- Latest standard release passed: $($summary.gate_green_readiness.latest_standard_passed)"
+$markdown += "- Standard runs completed: $($summary.gate_green_readiness.standard_runs_completed)"
+$markdown += "- All thresholds strict: $($summary.gate_green_readiness.all_thresholds_strict)"
+$markdown += "- Ready for release: $($summary.gate_green_readiness.ready_for_release)"
+$markdown += ""
+$markdown += "### Release checklist"
+$markdown += "- [ ] Standard release gate passes 50 rounds @ 100%"
+$markdown += "- [ ] 3 consecutive full passes achieved"
+$markdown += "- [ ] E2E P0 tests pass"
+$markdown += "- [ ] Multi-dataflow baseline passes"
 $markdown += ""
 $markdown += "## Smoke By Dataflow"
 $markdown += ""
