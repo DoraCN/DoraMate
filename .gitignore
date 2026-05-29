@@ -6,3 +6,15 @@
 # 忽略 IDE 临时文件
 .claude/
 .vscode/
+
+# 门禁运行产生的临时 YAML 文件
+doramate_*.yml
+doramate_*.yaml
+
+# 录像/录制文件
+*.avi
+*.mp4
+
+# C# 编译中间产物
+*.obj/
+**/obj/
