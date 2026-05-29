@@ -11,6 +11,16 @@ $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $outDir = Join-Path $repoRoot "artifacts\nuget"
 
+# Read version from VERSION file
+$versionFile = Join-Path $repoRoot "..\VERSION"
+if (Test-Path $versionFile) {
+    $Version = (Get-Content $versionFile -Raw).Trim()
+} else {
+    $Version = "0.0.0"
+    Write-Warning "VERSION file not found at '$versionFile'. Using '$Version' as fallback."
+}
+Write-Host "[package-nuget] Version: $Version (from VERSION)"
+
 # Build solution first unless skipped
 if (-not $SkipBuild) {
     Write-Host "[package-nuget] Building solution ($Configuration)..."
@@ -20,7 +30,7 @@ if (-not $SkipBuild) {
     }
 }
 
-$noBuildArg = if ($SkipBuild) { "-p:NoBuild=true" } else { "" }
+$noBuildArg = if ($SkipBuild) { "--no-build" } else { "" }
 
 # Pack DoraNode SDK
 Write-Host "[package-nuget] Packing DoraNode..."
@@ -29,6 +39,7 @@ dotnet pack (Join-Path $repoRoot "src\DoraNode\DoraNode.csproj") `
     -o $outDir `
     $noBuildArg `
     -p:NuGetAudit=false `
+    -p:Version=$Version `
     -p:Authors="DoraMate" `
     -p:RepositoryUrl=https://github.com/dora-rs/doramate
 if ($LASTEXITCODE -ne 0) {
@@ -42,6 +53,7 @@ dotnet pack (Join-Path $repoRoot "src\DoraOperator\DoraOperator.csproj") `
     -o $outDir `
     $noBuildArg `
     -p:NuGetAudit=false `
+    -p:Version=$Version `
     -p:Authors="DoraMate" `
     -p:RepositoryUrl=https://github.com/dora-rs/doramate
 if ($LASTEXITCODE -ne 0) {
