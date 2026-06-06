@@ -97,6 +97,9 @@ jobs:
         working-directory: ./dora-api-csharp/third_party/dora
         run: cargo build -p dora-cli --release
 
+      - name: Build native C libraries (dora-node-api-c, dora-operator-api-c)
+        run: ./dora-api-csharp/scripts/build-native.ps1 -Configuration Release
+
       - name: Add Dora CLI to PATH
         run: |
           $doraBin = Join-Path $PWD 'dora-api-csharp/third_party/dora/target/release'
@@ -148,6 +151,9 @@ jobs:
       - name: Build Dora CLI
         working-directory: ./dora-api-csharp/third_party/dora
         run: cargo build -p dora-cli --release
+
+      - name: Build native C libraries (dora-node-api-c, dora-operator-api-c)
+        run: ./dora-api-csharp/scripts/build-native.ps1 -Configuration Release
 
       - name: Add Dora CLI to PATH
         run: |
