@@ -51,6 +51,9 @@ jobs:
           $doraBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           & (Join-Path $doraBin 'dora.exe') --version
 
+      - name: Ensure local NuGet source exists
+        run: New-Item -ItemType Directory -Force -Path dora-api-csharp/artifacts/packages | Out-Null
+
       - name: Run multi-dataflow smoke
         run: ./scripts/smoke-localagent-multi-dataflow.ps1 -Profile ${{ github.event.inputs.profile }} -Rounds ${{ github.event.inputs.rounds }}
 
