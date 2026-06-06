@@ -11,7 +11,7 @@ permissions:
 jobs:
   e2e-tests:
     name: windows-e2e-tests
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 30
     defaults:
       run:
@@ -24,13 +24,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 8.0.x
 
@@ -50,6 +50,9 @@ jobs:
           $doraBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           & (Join-Path $doraBin 'dora.exe') --version
 
+      - name: Ensure local NuGet source exists
+        run: New-Item -ItemType Directory -Force -Path dora-api-csharp/artifacts/packages | Out-Null
+
       - name: Build smoke sample
         working-directory: ./dora-api-csharp/samples/csharp-dataflow
         run: dotnet build CSharpNode.csproj -c Release -p:NuGetAudit=false
@@ -68,7 +71,7 @@ jobs:
 
       - name: Upload E2E test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: e2e-test-results
           path: out/e2e/

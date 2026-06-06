@@ -51,6 +51,9 @@ jobs:
           $doraBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           & (Join-Path $doraBin 'dora.exe') --version
 
+      - name: Ensure local NuGet source exists
+        run: New-Item -ItemType Directory -Force -Path dora-api-csharp/artifacts/packages | Out-Null
+
       - name: Build smoke sample
         run: |
           Push-Location dora-api-csharp/samples/csharp-dataflow
