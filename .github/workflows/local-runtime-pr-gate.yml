@@ -98,7 +98,8 @@ jobs:
         run: cargo build -p dora-cli --release
 
       - name: Build native C libraries (dora-node-api-c, dora-operator-api-c)
-        run: ./dora-api-csharp/scripts/build-native.ps1 -Configuration Release
+        working-directory: dora-api-csharp
+        run: pwsh ./scripts/build-native.ps1 -Configuration Release
 
       - name: Add Dora CLI to PATH
         run: |
@@ -153,7 +154,8 @@ jobs:
         run: cargo build -p dora-cli --release
 
       - name: Build native C libraries (dora-node-api-c, dora-operator-api-c)
-        run: ./dora-api-csharp/scripts/build-native.ps1 -Configuration Release
+        working-directory: dora-api-csharp
+        run: pwsh ./scripts/build-native.ps1 -Configuration Release
 
       - name: Add Dora CLI to PATH
         run: |
