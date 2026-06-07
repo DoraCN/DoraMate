@@ -12,7 +12,7 @@ jobs:
   e2e-tests:
     name: windows-e2e-tests
     runs-on: windows-2022
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         shell: pwsh
@@ -57,9 +57,104 @@ jobs:
       - name: Ensure local NuGet source exists
         run: New-Item -ItemType Directory -Force -Path dora-api-csharp/artifacts/packages | Out-Null
 
-      - name: Build smoke sample
-        working-directory: ./dora-api-csharp/samples/csharp-dataflow
-        run: dotnet build CSharpNode.csproj -c Release -p:NuGetAudit=false
+      - name: Build C# Node SDK
+        working-directory: ./dora-api-csharp
+        run: dotnet build src/DoraNode/DoraNode.csproj -c Release -p:NuGetAudit=false
+
+      - name: Build C# Operator SDK
+        working-directory: ./dora-api-csharp
+        run: dotnet build src/DoraOperator/DoraOperator.csproj -c Release -p:NuGetAudit=false
+
+      - name: Build C# template pack
+        working-directory: ./dora-api-csharp
+        run: dotnet build templates/DoraMate.Templates.csproj -c Release -p:NuGetAudit=false
+
+      - name: Build C# sample projects
+        shell: pwsh
+        run: |
+          $samples = @(
+            "samples/csharp-dataflow/CSharpNode.csproj",
+            "samples/csharp-multi-node/Producer.csproj",
+            "samples/csharp-multi-node/Consumer.csproj",
+            "samples/csharp-async-node-dataflow/Producer.csproj",
+            "samples/csharp-async-node-dataflow/Consumer.csproj",
+            "samples/csharp-arrow-node-dataflow/Producer.csproj",
+            "samples/csharp-arrow-node-dataflow/Consumer.csproj",
+            "samples/csharp-advanced-arrow-node-dataflow/Producer.csproj",
+            "samples/csharp-advanced-arrow-node-dataflow/Consumer.csproj",
+            "samples/csharp-complex-arrow-contract-node-dataflow/Producer.csproj",
+            "samples/csharp-complex-arrow-contract-node-dataflow/Consumer.csproj",
+            "samples/csharp-operator-dataflow/CSharpCounterOperator.csproj",
+            "samples/csharp-operator-dataflow/Producer.csproj",
+            "samples/csharp-operator-dataflow/Sink.csproj",
+            "samples/csharp-operator-arrow-roundtrip/RecordBatchProducerOperator.csproj",
+            "samples/csharp-operator-arrow-roundtrip/RecordBatchVerifierOperator.csproj",
+            "samples/csharp-operator-arrow-roundtrip/Producer.csproj",
+            "samples/csharp-operator-arrow-roundtrip/Sink.csproj",
+            "samples/csharp-operator-contract-arrow-dataflow/ContractBatchProducerOperator.csproj",
+            "samples/csharp-operator-contract-arrow-dataflow/ContractBatchVerifierOperator.csproj",
+            "samples/csharp-operator-contract-arrow-dataflow/Producer.csproj",
+            "samples/csharp-operator-contract-arrow-dataflow/Sink.csproj",
+            "samples/csharp-node-operator-arrow-dataflow/RecordBatchForwardOperator.csproj",
+            "samples/csharp-node-operator-arrow-dataflow/Producer.csproj",
+            "samples/csharp-node-operator-arrow-dataflow/Consumer.csproj"
+          )
+          Push-Location dora-api-csharp
+          try {
+            $failed = @()
+            foreach ($proj in $samples) {
+              Write-Host "  Building: $proj" -ForegroundColor Cyan
+              dotnet build $proj -c Release -p:NuGetAudit=false 2>&1 | Out-Host
+              if ($LASTEXITCODE -ne 0) {
+                $failed += $proj
+              }
+            }
+            if ($failed.Count -gt 0) {
+              throw "Build failed for $($failed.Count) project(s):`n$($failed -join "`n")"
+            }
+          }
+          finally {
+            Pop-Location
+          }
+
+      - name: Build C# operator projects (NativeAOT publish)
+        working-directory: ./dora-api-csharp
+        run: dotnet publish samples/csharp-operator-dataflow/CSharpCounterOperator.csproj -c Release -p:NuGetAudit=false
+
+      - name: Build template projects from dotnet new
+        shell: pwsh
+        run: |
+          $tempDir = Join-Path $env:TEMP "doramate-ci-templates-$([System.IO.Path]::GetRandomFileName())"
+          New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+          try {
+            Push-Location dora-api-csharp
+            try {
+              # Pack templates
+              dotnet pack templates/DoraMate.Templates.csproj -c Release -p:NuGetAudit=false -o artifacts/templates
+              if ($LASTEXITCODE -ne 0) { throw "Template pack failed" }
+
+              # Install and test dora-node
+              $nupkg = Get-ChildItem artifacts/templates -Filter "DoraMate.Templates.*.nupkg" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+              dotnet new install $nupkg.FullName --force
+              if ($LASTEXITCODE -ne 0) { throw "Template install failed" }
+
+              dotnet new dora-node -n TestNode -o (Join-Path $tempDir "TestNode")
+              if ($LASTEXITCODE -ne 0) { throw "dora-node template creation failed" }
+              dotnet build (Join-Path $tempDir "TestNode") -c Release -p:NuGetAudit=false
+              if ($LASTEXITCODE -ne 0) { throw "dora-node template build failed" }
+              Write-Host "[OK] dora-node template" -ForegroundColor Green
+
+              dotnet new dora-operator -n TestOperator -o (Join-Path $tempDir "TestOperator")
+              if ($LASTEXITCODE -ne 0) { throw "dora-operator template creation failed" }
+              Write-Host "[OK] dora-operator template created" -ForegroundColor Green
+            }
+            finally {
+              Pop-Location
+            }
+          }
+          finally {
+            if (Test-Path $tempDir) { Remove-Item -Recurse -Force $tempDir }
+          }
 
       - name: Build LocalAgent
         working-directory: ./doramate-localagent

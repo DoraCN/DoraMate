@@ -25,7 +25,7 @@ jobs:
   windows-pr-localagent-tests:
     name: windows-pr-localagent-tests
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     defaults:
       run:
         shell: pwsh
@@ -46,7 +46,7 @@ jobs:
   windows-pr-frontend-tests:
     name: windows-pr-frontend-tests
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     defaults:
       run:
         shell: pwsh
@@ -121,7 +121,7 @@ jobs:
   windows-pr-e2e-p0:
     name: windows-pr-e2e-p0
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     defaults:
       run:
         shell: pwsh
@@ -166,9 +166,61 @@ jobs:
       - name: Ensure local NuGet source exists
         run: New-Item -ItemType Directory -Force -Path dora-api-csharp/artifacts/packages | Out-Null
 
-      - name: Build smoke sample
-        working-directory: ./dora-api-csharp/samples/csharp-dataflow
-        run: dotnet build CSharpNode.csproj -c Release -p:NuGetAudit=false
+      - name: Build C# Node SDK
+        working-directory: ./dora-api-csharp
+        run: dotnet build src/DoraNode/DoraNode.csproj -c Release -p:NuGetAudit=false
+
+      - name: Build C# Operator SDK
+        working-directory: ./dora-api-csharp
+        run: dotnet build src/DoraOperator/DoraOperator.csproj -c Release -p:NuGetAudit=false
+
+      - name: Build C# sample projects
+        shell: pwsh
+        run: |
+          $samples = @(
+            "samples/csharp-dataflow/CSharpNode.csproj",
+            "samples/csharp-multi-node/Producer.csproj",
+            "samples/csharp-multi-node/Consumer.csproj",
+            "samples/csharp-async-node-dataflow/Producer.csproj",
+            "samples/csharp-async-node-dataflow/Consumer.csproj",
+            "samples/csharp-arrow-node-dataflow/Producer.csproj",
+            "samples/csharp-arrow-node-dataflow/Consumer.csproj",
+            "samples/csharp-advanced-arrow-node-dataflow/Producer.csproj",
+            "samples/csharp-advanced-arrow-node-dataflow/Consumer.csproj",
+            "samples/csharp-complex-arrow-contract-node-dataflow/Producer.csproj",
+            "samples/csharp-complex-arrow-contract-node-dataflow/Consumer.csproj",
+            "samples/csharp-operator-dataflow/CSharpCounterOperator.csproj",
+            "samples/csharp-operator-dataflow/Producer.csproj",
+            "samples/csharp-operator-dataflow/Sink.csproj",
+            "samples/csharp-operator-arrow-roundtrip/RecordBatchProducerOperator.csproj",
+            "samples/csharp-operator-arrow-roundtrip/RecordBatchVerifierOperator.csproj",
+            "samples/csharp-operator-arrow-roundtrip/Producer.csproj",
+            "samples/csharp-operator-arrow-roundtrip/Sink.csproj",
+            "samples/csharp-operator-contract-arrow-dataflow/ContractBatchProducerOperator.csproj",
+            "samples/csharp-operator-contract-arrow-dataflow/ContractBatchVerifierOperator.csproj",
+            "samples/csharp-operator-contract-arrow-dataflow/Producer.csproj",
+            "samples/csharp-operator-contract-arrow-dataflow/Sink.csproj",
+            "samples/csharp-node-operator-arrow-dataflow/RecordBatchForwardOperator.csproj",
+            "samples/csharp-node-operator-arrow-dataflow/Producer.csproj",
+            "samples/csharp-node-operator-arrow-dataflow/Consumer.csproj"
+          )
+          Push-Location dora-api-csharp
+          try {
+            $failed = @()
+            foreach ($proj in $samples) {
+              Write-Host "  Building: $proj" -ForegroundColor Cyan
+              dotnet build $proj -c Release -p:NuGetAudit=false 2>&1 | Out-Host
+              if ($LASTEXITCODE -ne 0) {
+                $failed += $proj
+              }
+            }
+            if ($failed.Count -gt 0) {
+              throw "Build failed for $($failed.Count) project(s):`n$($failed -join "`n")"
+            }
+          }
+          finally {
+            Pop-Location
+          }
 
       - name: Build LocalAgent
         working-directory: ./doramate-localagent
