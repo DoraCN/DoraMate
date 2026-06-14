@@ -10,6 +10,9 @@ namespace DoraNode;
 /// </summary>
 public static class ArrowRecordBatchExtensions
 {
+    /// <summary>
+    /// Attempts to deserialize the input event payload as an Arrow <see cref="RecordBatch"/>.
+    /// </summary>
     public static bool TryReadRecordBatch(this DoraEvent doraEvent, out RecordBatch? recordBatch)
     {
         ArgumentNullException.ThrowIfNull(doraEvent);
@@ -40,6 +43,9 @@ public static class ArrowRecordBatchExtensions
         }
     }
 
+    /// <summary>
+    /// Attempts to read and validate an Arrow record batch against an expected schema contract.
+    /// </summary>
     public static bool TryReadExpectedRecordBatch(
         this DoraEvent doraEvent,
         long? expectedRowCount,
@@ -58,6 +64,9 @@ public static class ArrowRecordBatchExtensions
             out _);
     }
 
+    /// <summary>
+    /// Attempts to read and validate an Arrow record batch against an expected schema contract.
+    /// </summary>
     public static bool TryReadExpectedRecordBatch(
         this DoraEvent doraEvent,
         long? expectedRowCount,
@@ -96,6 +105,9 @@ public static class ArrowRecordBatchExtensions
         return false;
     }
 
+    /// <summary>
+    /// Attempts to read an Arrow record batch and project it into a typed model.
+    /// </summary>
     public static bool TryReadModel<TModel>(
         this DoraEvent doraEvent,
         IArrowRecordBatchContract<TModel> contract,
@@ -105,6 +117,9 @@ public static class ArrowRecordBatchExtensions
         return TryReadModel(doraEvent, contract, out model, out error, out _);
     }
 
+    /// <summary>
+    /// Attempts to read an Arrow record batch and project it into a typed model.
+    /// </summary>
     public static bool TryReadModel<TModel>(
         this DoraEvent doraEvent,
         IArrowRecordBatchContract<TModel> contract,
@@ -137,6 +152,9 @@ public static class ArrowRecordBatchExtensions
         }
     }
 
+    /// <summary>
+    /// Serializes a record batch to IPC bytes and sends it through a node output.
+    /// </summary>
     public static bool SendRecordBatch(this DoraNode node, string outputId, RecordBatch recordBatch)
     {
         ArgumentNullException.ThrowIfNull(node);
@@ -146,6 +164,9 @@ public static class ArrowRecordBatchExtensions
         return node.SendRecordBatchIpc(outputId, ipcBytes);
     }
 
+    /// <summary>
+    /// Serializes a record batch to IPC bytes, sends it through a node output, and throws when the send fails.
+    /// </summary>
     public static void SendRecordBatchOrThrow(this DoraNode node, string outputId, RecordBatch recordBatch)
     {
         ArgumentNullException.ThrowIfNull(node);

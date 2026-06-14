@@ -7,17 +7,64 @@ namespace DoraNode;
 /// </summary>
 public enum DoraNodeErrorCode
 {
+    /// <summary>
+    /// An unspecified DoraNode failure occurred.
+    /// </summary>
     Unknown = 0,
+
+    /// <summary>
+    /// The native Dora node library could not be loaded.
+    /// </summary>
     NativeLibraryLoadFailed,
+
+    /// <summary>
+    /// The node context could not be initialized from the Dora runtime environment.
+    /// </summary>
     ContextInitializationFailed,
+
+    /// <summary>
+    /// Sending a byte or text output failed.
+    /// </summary>
     OutputSendFailed,
+
+    /// <summary>
+    /// Sending an Arrow payload failed.
+    /// </summary>
     ArrowOutputSendFailed,
+
+    /// <summary>
+    /// Sending an Arrow record batch failed.
+    /// </summary>
     RecordBatchOutputSendFailed,
+
+    /// <summary>
+    /// Converting an Arrow payload to IPC bytes failed.
+    /// </summary>
     ArrowPayloadConversionFailed,
+
+    /// <summary>
+    /// An expected Arrow payload was missing.
+    /// </summary>
     ArrowPayloadMissing,
+
+    /// <summary>
+    /// Arrow schema validation failed.
+    /// </summary>
     SchemaValidationFailed,
+
+    /// <summary>
+    /// Contract projection from an Arrow record batch failed.
+    /// </summary>
     ContractValidationFailed,
+
+    /// <summary>
+    /// The caller violated a managed lifecycle rule.
+    /// </summary>
     LifecycleViolation,
+
+    /// <summary>
+    /// A native handle was invalid or unusable.
+    /// </summary>
     InvalidNativeHandle,
 }
 
@@ -38,9 +85,24 @@ public sealed class DoraNativeLibraryDiagnostics
         CandidatePaths = candidatePaths;
     }
 
+    /// <summary>
+    /// Gets the logical native library name used for P/Invoke resolution.
+    /// </summary>
     public string LibraryName { get; }
+
+    /// <summary>
+    /// Gets the platform-specific native library file name.
+    /// </summary>
     public string LibraryFileName { get; }
+
+    /// <summary>
+    /// Gets the library path that was successfully loaded, when available.
+    /// </summary>
     public string? LoadedLibraryPath { get; }
+
+    /// <summary>
+    /// Gets the candidate library paths that were probed.
+    /// </summary>
     public IReadOnlyList<string> CandidatePaths { get; }
 }
 
@@ -65,11 +127,34 @@ public sealed class DoraNodeDiagnosticInfo
         ProcessPath = processPath;
     }
 
+    /// <summary>
+    /// Gets the high-level operation that produced the diagnostics snapshot.
+    /// </summary>
     public string Operation { get; }
+
+    /// <summary>
+    /// Gets an optional detail string associated with the operation.
+    /// </summary>
     public string? Detail { get; }
+
+    /// <summary>
+    /// Gets native library discovery and loading diagnostics.
+    /// </summary>
     public DoraNativeLibraryDiagnostics NativeLibrary { get; }
+
+    /// <summary>
+    /// Gets the current working directory of the process.
+    /// </summary>
     public string CurrentDirectory { get; }
+
+    /// <summary>
+    /// Gets the application base directory.
+    /// </summary>
     public string BaseDirectory { get; }
+
+    /// <summary>
+    /// Gets the current process executable path, when available.
+    /// </summary>
     public string? ProcessPath { get; }
 
     internal static DoraNodeDiagnosticInfo Capture(string operation, string? detail = null)
@@ -85,6 +170,9 @@ public sealed class DoraNodeDiagnosticInfo
             Environment.ProcessPath);
     }
 
+    /// <summary>
+    /// Formats the diagnostics snapshot as a human-readable multi-line string.
+    /// </summary>
     public string ToDisplayString()
     {
         var builder = new StringBuilder();
@@ -129,11 +217,17 @@ public sealed class DoraNodeDiagnosticInfo
 /// </summary>
 public class DoraException : Exception
 {
+    /// <summary>
+    /// Initializes a new <see cref="DoraException"/> with a message.
+    /// </summary>
     public DoraException(string message)
         : base(message)
     {
     }
 
+    /// <summary>
+    /// Initializes a new <see cref="DoraException"/> with a message and inner exception.
+    /// </summary>
     public DoraException(string message, Exception innerException)
         : base(message, innerException)
     {
@@ -152,8 +246,19 @@ public class DoraException : Exception
         Diagnostics = diagnostics;
     }
 
+    /// <summary>
+    /// Gets the stable DoraNode error code associated with this exception.
+    /// </summary>
     public DoraNodeErrorCode ErrorCode { get; } = DoraNodeErrorCode.Unknown;
+
+    /// <summary>
+    /// Gets the high-level operation that failed, when available.
+    /// </summary>
     public string? Operation { get; }
+
+    /// <summary>
+    /// Gets the structured diagnostics snapshot captured at failure time, when available.
+    /// </summary>
     public DoraNodeDiagnosticInfo? Diagnostics { get; }
 
     internal static DoraException Create(
@@ -176,6 +281,9 @@ public class DoraException : Exception
         return errorCode == DoraNodeErrorCode.Unknown ? message : $"[{errorCode}] {message}";
     }
 
+    /// <summary>
+    /// Formats the exception, including structured diagnostics when they are available.
+    /// </summary>
     public override string ToString()
     {
         if (Diagnostics is null)

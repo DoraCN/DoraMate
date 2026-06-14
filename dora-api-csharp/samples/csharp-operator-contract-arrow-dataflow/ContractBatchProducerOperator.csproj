@@ -10,6 +10,7 @@
     <SelfContained>true</SelfContained>
     <InvariantGlobalization>true</InvariantGlobalization>
     <AssemblyName>ContractBatchProducerOperator</AssemblyName>
+    <PublishDir>$(BaseOutputPath)$(Configuration)\$(TargetFramework)\native\</PublishDir>
   </PropertyGroup>
 
   <Choose>

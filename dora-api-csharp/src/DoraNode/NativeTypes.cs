@@ -5,10 +5,10 @@ namespace DoraNode;
 /// <summary>
 /// Native ABI types used by the Dora node binding.
 /// </summary>
-public static class NativeTypes
+internal static class NativeTypes
 {
     [StructLayout(LayoutKind.Sequential)]
-    public struct NativeVecU8
+    internal struct NativeVecU8
     {
         public IntPtr Ptr;
         public nuint Len;
@@ -31,7 +31,7 @@ public static class NativeTypes
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct NativeArrowArray
+    internal struct NativeArrowArray
     {
         public long Length;
         public long NullCount;
@@ -48,7 +48,7 @@ public static class NativeTypes
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct NativeArrowSchema
+    internal struct NativeArrowSchema
     {
         public IntPtr Format;
         public IntPtr Name;
@@ -64,7 +64,7 @@ public static class NativeTypes
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct NativeArrowPayload
+    internal struct NativeArrowPayload
     {
         public IntPtr Array;
         public IntPtr Schema;

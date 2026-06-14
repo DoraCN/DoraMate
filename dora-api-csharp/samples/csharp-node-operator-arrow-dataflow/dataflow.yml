@@ -21,7 +21,7 @@ nodes:
       - id: recordbatch-forwarder
         build: |
           dotnet publish RecordBatchForwardOperator.csproj -c Release -p:NuGetAudit=false
-        shared-library: ../../artifacts/samples/csharp-node-operator-arrow-dataflow/RecordBatchForwardOperator/Release/net8.0/win-x64/native/RecordBatchForwardOperator
+        shared-library: ../../artifacts/samples/csharp-node-operator-arrow-dataflow/RecordBatchForwardOperator/Release/net8.0/native/RecordBatchForwardOperator
         inputs:
           batch: producer/batch
         outputs:

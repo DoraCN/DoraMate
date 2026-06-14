@@ -8,9 +8,24 @@ namespace DoraOperator;
 /// </summary>
 public interface IArrowRecordBatchContract<TModel>
 {
+    /// <summary>
+    /// Gets the expected row count, or <see langword="null"/> when row count is unconstrained.
+    /// </summary>
     long? ExpectedRowCount { get; }
+
+    /// <summary>
+    /// Gets the expected field names in schema order.
+    /// </summary>
     IReadOnlyList<string> ExpectedFieldNames { get; }
+
+    /// <summary>
+    /// Gets the expected Arrow type IDs in schema order.
+    /// </summary>
     IReadOnlyList<ArrowTypeId> ExpectedTypeIds { get; }
+
+    /// <summary>
+    /// Validates and projects the supplied record batch into a typed model.
+    /// </summary>
     bool TryRead(RecordBatch recordBatch, out TModel? model, out string? error);
 }
 
@@ -19,6 +34,9 @@ public interface IArrowRecordBatchContract<TModel>
 /// </summary>
 public abstract class ArrowRecordBatchContract<TModel> : IArrowRecordBatchContract<TModel>
 {
+    /// <summary>
+    /// Initializes a schema-first record-batch contract.
+    /// </summary>
     protected ArrowRecordBatchContract(
         long? expectedRowCount,
         IReadOnlyList<string> expectedFieldNames,
@@ -32,10 +50,14 @@ public abstract class ArrowRecordBatchContract<TModel> : IArrowRecordBatchContra
         ExpectedTypeIds = expectedTypeIds;
     }
 
+    /// <inheritdoc />
     public long? ExpectedRowCount { get; }
+    /// <inheritdoc />
     public IReadOnlyList<string> ExpectedFieldNames { get; }
+    /// <inheritdoc />
     public IReadOnlyList<ArrowTypeId> ExpectedTypeIds { get; }
 
+    /// <inheritdoc />
     public bool TryRead(RecordBatch recordBatch, out TModel? model, out string? error)
     {
         ArgumentNullException.ThrowIfNull(recordBatch);
@@ -54,6 +76,9 @@ public abstract class ArrowRecordBatchContract<TModel> : IArrowRecordBatchContra
         return TryMap(recordBatch, out model, out error);
     }
 
+    /// <summary>
+    /// Projects each record-batch row into a typed row model using the contract schema.
+    /// </summary>
     protected bool TryProjectRows<TRow>(
         RecordBatch recordBatch,
         ArrowRecordBatchRowProjector<TRow> projector,
@@ -72,6 +97,9 @@ public abstract class ArrowRecordBatchContract<TModel> : IArrowRecordBatchContra
             out error);
     }
 
+    /// <summary>
+    /// Projects each row and composes the projected rows into the final model.
+    /// </summary>
     protected bool TryProjectModel<TRow>(
         RecordBatch recordBatch,
         ArrowRecordBatchRowProjector<TRow> projector,
@@ -100,5 +128,8 @@ public abstract class ArrowRecordBatchContract<TModel> : IArrowRecordBatchContra
         return true;
     }
 
+    /// <summary>
+    /// Maps a validated record batch into the target model type.
+    /// </summary>
     protected abstract bool TryMap(RecordBatch recordBatch, out TModel? model, out string? error);
 }

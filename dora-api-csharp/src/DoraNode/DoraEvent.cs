@@ -15,12 +15,39 @@ public sealed class DoraEvent : IDisposable
     private bool _dataMaterialized;
     private bool _disposed;
 
+    /// <summary>
+    /// Gets the kind of Dora event represented by this instance.
+    /// </summary>
     public EventType Type { get; }
+
+    /// <summary>
+    /// Gets the input ID for <see cref="EventType.Input"/> events.
+    /// </summary>
     public string? Id { get; }
+
+    /// <summary>
+    /// Gets the serialized OpenTelemetry context attached to an input event, when present.
+    /// </summary>
     public string? OpenTelemetryContext { get; }
+
+    /// <summary>
+    /// Gets the native timestamp associated with an input event.
+    /// </summary>
     public ulong Timestamp { get; }
+
+    /// <summary>
+    /// Gets the closed input ID for <see cref="EventType.InputClosed"/> events.
+    /// </summary>
     public string? InputClosedId { get; }
+
+    /// <summary>
+    /// Gets the runtime error message for <see cref="EventType.Error"/> events.
+    /// </summary>
     public string? ErrorMessage { get; }
+
+    /// <summary>
+    /// Gets the byte payload for input events, materializing it on first access.
+    /// </summary>
     public byte[]? Data => GetData();
 
     internal DoraEvent(IntPtr eventPtr)
@@ -31,19 +58,23 @@ public sealed class DoraEvent : IDisposable
         if (Type == EventType.Input)
         {
             Id = ReadUtf8Slice(NativeMethods.ReadDoraInputId, eventPtr);
-            OpenTelemetryContext = ReadUtf8Slice(NativeMethods.ReadDoraInputOpenTelemetryContext, eventPtr);
+            OpenTelemetryContext = TryReadUtf8Slice(NativeMethods.ReadDoraInputOpenTelemetryContext, eventPtr);
             Timestamp = NativeMethods.ReadDoraInputTimestamp(eventPtr);
         }
         else if (Type == EventType.InputClosed)
         {
-            InputClosedId = ReadUtf8Slice(NativeMethods.ReadDoraInputClosedId, eventPtr);
+            InputClosedId = TryReadUtf8Slice(NativeMethods.ReadDoraInputClosedId, eventPtr);
         }
         else if (Type == EventType.Error)
         {
-            ErrorMessage = ReadUtf8Slice(NativeMethods.ReadDoraErrorMessage, eventPtr);
+            ErrorMessage = TryReadUtf8Slice(NativeMethods.ReadDoraErrorMessage, eventPtr);
         }
     }
 
+    /// <summary>
+    /// Materializes the byte payload for an input event.
+    /// </summary>
+    /// <returns>The input bytes, or <see langword="null"/> when the event does not carry a byte payload.</returns>
     public byte[]? GetData()
     {
         lock (_sync)
@@ -74,6 +105,11 @@ public sealed class DoraEvent : IDisposable
         }
     }
 
+    /// <summary>
+    /// Attempts to take the input payload as an Arrow array/schema pair.
+    /// </summary>
+    /// <param name="payload">Receives the Arrow payload when the input carries Arrow data.</param>
+    /// <returns><see langword="true"/> when an Arrow payload was available; otherwise, <see langword="false"/>.</returns>
     public bool TryReadArrowPayload(out ArrowPayload? payload)
     {
         lock (_sync)
@@ -105,6 +141,9 @@ public sealed class DoraEvent : IDisposable
         }
     }
 
+    /// <summary>
+    /// Releases the native event handle associated with this managed wrapper.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)
@@ -128,6 +167,18 @@ public sealed class DoraEvent : IDisposable
         return ptr != IntPtr.Zero && len.ToUInt64() > 0
             ? Marshal.PtrToStringUTF8(ptr, (int)len)
             : null;
+    }
+
+    private static string? TryReadUtf8Slice(ReadUtf8SliceDelegate reader, IntPtr eventPtr)
+    {
+        try
+        {
+            return ReadUtf8Slice(reader, eventPtr);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return null;
+        }
     }
 
     private void ThrowIfDisposed()

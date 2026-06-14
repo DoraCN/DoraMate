@@ -85,6 +85,10 @@ public sealed class DoraNode : IDisposable
         }
     }
 
+    /// <summary>
+    /// Reads the next event from the native Dora event stream.
+    /// </summary>
+    /// <returns>The next <see cref="DoraEvent"/>, or <see langword="null"/> when the stream ends.</returns>
     public DoraEvent? Next()
     {
         ThrowIfDisposed();
@@ -92,6 +96,11 @@ public sealed class DoraNode : IDisposable
         return ReadNextEventCore("ReadNextEvent");
     }
 
+    /// <summary>
+    /// Asynchronously reads the next event from the native Dora event stream.
+    /// </summary>
+    /// <param name="cancellationToken">Cancels the pending read.</param>
+    /// <returns>The next <see cref="DoraEvent"/>, or <see langword="null"/> when the stream ends.</returns>
     public async ValueTask<DoraEvent?> NextAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -128,6 +137,11 @@ public sealed class DoraNode : IDisposable
         }
     }
 
+    /// <summary>
+    /// Asynchronously enumerates every event produced by the native Dora event stream.
+    /// </summary>
+    /// <param name="cancellationToken">Cancels the asynchronous enumeration.</param>
+    /// <returns>An asynchronous sequence of <see cref="DoraEvent"/> values.</returns>
     public async IAsyncEnumerable<DoraEvent> ReadAllEventsAsync(
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
@@ -143,6 +157,12 @@ public sealed class DoraNode : IDisposable
         }
     }
 
+    /// <summary>
+    /// Sends a raw byte payload to the specified output.
+    /// </summary>
+    /// <param name="outputId">The target Dora output ID.</param>
+    /// <param name="data">The payload bytes to send.</param>
+    /// <returns><see langword="true"/> when the runtime accepted the payload; otherwise, <see langword="false"/>.</returns>
     public bool SendOutput(string outputId, byte[] data)
     {
         ThrowIfDisposed();
@@ -173,6 +193,12 @@ public sealed class DoraNode : IDisposable
         }
     }
 
+    /// <summary>
+    /// Sends a UTF-8 string payload to the specified output.
+    /// </summary>
+    /// <param name="outputId">The target Dora output ID.</param>
+    /// <param name="data">The string payload to send.</param>
+    /// <returns><see langword="true"/> when the runtime accepted the payload; otherwise, <see langword="false"/>.</returns>
     public bool SendOutput(string outputId, string data)
     {
         return SendOutput(outputId, Encoding.UTF8.GetBytes(data));
@@ -186,6 +212,12 @@ public sealed class DoraNode : IDisposable
         SendOutputOrThrow(outputId, Encoding.UTF8.GetBytes(data));
     }
 
+    /// <summary>
+    /// Sends an Arrow payload to the specified output.
+    /// </summary>
+    /// <param name="outputId">The target Dora output ID.</param>
+    /// <param name="payload">The Arrow payload whose ownership transfers to the native runtime on success.</param>
+    /// <returns><see langword="true"/> when the runtime accepted the payload; otherwise, <see langword="false"/>.</returns>
     public bool SendArrow(string outputId, ArrowPayload payload)
     {
         ThrowIfDisposed();

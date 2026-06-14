@@ -10,6 +10,7 @@
     <SelfContained>true</SelfContained>
     <InvariantGlobalization>true</InvariantGlobalization>
     <AssemblyName>RecordBatchForwardOperator</AssemblyName>
+    <PublishDir>$(BaseOutputPath)$(Configuration)\$(TargetFramework)\native\</PublishDir>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\DoraOperator\DoraOperator.csproj" />

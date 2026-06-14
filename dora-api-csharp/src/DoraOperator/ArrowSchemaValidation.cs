@@ -8,6 +8,9 @@ namespace DoraOperator;
 /// </summary>
 public static class ArrowSchemaValidation
 {
+    /// <summary>
+    /// Validates that a schema contains the expected number of fields.
+    /// </summary>
     public static bool TryValidateFieldCount(Schema schema, int expectedFieldCount, out string? error)
     {
         ArgumentNullException.ThrowIfNull(schema);
@@ -23,6 +26,9 @@ public static class ArrowSchemaValidation
         return true;
     }
 
+    /// <summary>
+    /// Validates a schema field by index, name, and Arrow type.
+    /// </summary>
     public static bool TryValidateField(
         Schema schema,
         int index,
@@ -57,6 +63,9 @@ public static class ArrowSchemaValidation
         return true;
     }
 
+    /// <summary>
+    /// Resolves the index of a field by name.
+    /// </summary>
     public static bool TryGetFieldIndex(
         Schema schema,
         string expectedFieldName,
@@ -81,6 +90,9 @@ public static class ArrowSchemaValidation
         return false;
     }
 
+    /// <summary>
+    /// Validates a schema field by name and Arrow type.
+    /// </summary>
     public static bool TryValidateField(
         Schema schema,
         string expectedFieldName,
@@ -107,6 +119,9 @@ public static class ArrowSchemaValidation
         return true;
     }
 
+    /// <summary>
+    /// Validates that a schema field is a binary field.
+    /// </summary>
     public static bool TryValidateBinaryField(
         Schema schema,
         string expectedFieldName,
@@ -128,6 +143,9 @@ public static class ArrowSchemaValidation
         return true;
     }
 
+    /// <summary>
+    /// Validates that a schema field is a Date32 field with the expected unit.
+    /// </summary>
     public static bool TryValidateDate32Field(
         Schema schema,
         string expectedFieldName,
@@ -156,6 +174,9 @@ public static class ArrowSchemaValidation
         return true;
     }
 
+    /// <summary>
+    /// Validates that a schema field is a timestamp field with the expected unit and timezone.
+    /// </summary>
     public static bool TryValidateTimestampField(
         Schema schema,
         string expectedFieldName,
@@ -191,6 +212,9 @@ public static class ArrowSchemaValidation
         return true;
     }
 
+    /// <summary>
+    /// Validates that a schema field is a Decimal128 field with the expected precision and scale.
+    /// </summary>
     public static bool TryValidateDecimal128Field(
         Schema schema,
         string expectedFieldName,
@@ -226,6 +250,9 @@ public static class ArrowSchemaValidation
         return true;
     }
 
+    /// <summary>
+    /// Validates that a schema field is a Decimal256 field with the expected precision and scale.
+    /// </summary>
     public static bool TryValidateDecimal256Field(
         Schema schema,
         string expectedFieldName,
@@ -261,6 +288,9 @@ public static class ArrowSchemaValidation
         return true;
     }
 
+    /// <summary>
+    /// Validates that a schema field is a list field with the expected value type.
+    /// </summary>
     public static bool TryValidateListField(
         Schema schema,
         string expectedFieldName,
@@ -269,6 +299,9 @@ public static class ArrowSchemaValidation
         out string? error) =>
         TryValidateListField(schema, expectedFieldName, expectedValueFieldName: null, expectedValueTypeId, out index, out error);
 
+    /// <summary>
+    /// Validates that a schema field is a list field with the expected value field name and type.
+    /// </summary>
     public static bool TryValidateListField(
         Schema schema,
         string expectedFieldName,
@@ -305,6 +338,9 @@ public static class ArrowSchemaValidation
         return true;
     }
 
+    /// <summary>
+    /// Validates that a schema field is a map field with the expected key and value types.
+    /// </summary>
     public static bool TryValidateMapField(
         Schema schema,
         string expectedFieldName,
@@ -322,6 +358,9 @@ public static class ArrowSchemaValidation
             out index,
             out error);
 
+    /// <summary>
+    /// Validates that a schema field is a map field with the expected key/value field names and types.
+    /// </summary>
     public static bool TryValidateMapField(
         Schema schema,
         string expectedFieldName,
@@ -373,6 +412,9 @@ public static class ArrowSchemaValidation
         return true;
     }
 
+    /// <summary>
+    /// Validates that a schema field is a struct field with the expected child-field contract.
+    /// </summary>
     public static bool TryValidateStructField(
         Schema schema,
         string expectedFieldName,
@@ -431,6 +473,9 @@ public static class ArrowSchemaValidation
         return true;
     }
 
+    /// <summary>
+    /// Validates that a schema matches the expected field-name and type sequence.
+    /// </summary>
     public static bool TryValidateSchema(
         Schema schema,
         IReadOnlyList<string> expectedFieldNames,
@@ -464,6 +509,9 @@ public static class ArrowSchemaValidation
         return true;
     }
 
+    /// <summary>
+    /// Validates that a record batch contains the expected number of columns.
+    /// </summary>
     public static bool TryValidateColumnCount(RecordBatch recordBatch, int expectedColumnCount, out string? error)
     {
         ArgumentNullException.ThrowIfNull(recordBatch);
@@ -478,6 +526,9 @@ public static class ArrowSchemaValidation
         return true;
     }
 
+    /// <summary>
+    /// Validates that a record batch contains the expected number of rows.
+    /// </summary>
     public static bool TryValidateRowCount(RecordBatch recordBatch, long expectedRowCount, out string? error)
     {
         ArgumentNullException.ThrowIfNull(recordBatch);
@@ -492,6 +543,9 @@ public static class ArrowSchemaValidation
         return true;
     }
 
+    /// <summary>
+    /// Validates the row count, column count, and schema of a record batch.
+    /// </summary>
     public static bool TryValidateRecordBatch(
         RecordBatch recordBatch,
         long? expectedRowCount,

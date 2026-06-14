@@ -21,7 +21,7 @@ nodes:
       - id: contract-batch-producer
         build: |
           dotnet publish ContractBatchProducerOperator.csproj -c Release -p:NuGetAudit=false
-        shared-library: ../../artifacts/samples/cs-op-contract-arrow/ContractBatchProducerOperator/Release/net8.0/win-x64/native/ContractBatchProducerOperator
+        shared-library: ../../artifacts/samples/cs-op-contract-arrow/ContractBatchProducerOperator/Release/net8.0/native/ContractBatchProducerOperator
         inputs:
           trigger: producer/trigger
         outputs:
@@ -36,7 +36,7 @@ nodes:
       - id: contract-batch-verifier
         build: |
           dotnet publish ContractBatchVerifierOperator.csproj -c Release -p:NuGetAudit=false
-        shared-library: ../../artifacts/samples/cs-op-contract-arrow/ContractBatchVerifierOperator/Release/net8.0/win-x64/native/ContractBatchVerifierOperator
+        shared-library: ../../artifacts/samples/cs-op-contract-arrow/ContractBatchVerifierOperator/Release/net8.0/native/ContractBatchVerifierOperator
         inputs:
           batch: batch-producer-runtime/contract-batch-producer/batch
         outputs:

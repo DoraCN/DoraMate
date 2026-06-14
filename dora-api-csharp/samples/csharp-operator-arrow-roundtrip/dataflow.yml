@@ -21,7 +21,7 @@ nodes:
       - id: recordbatch-producer
         build: |
           dotnet publish RecordBatchProducerOperator.csproj -c Release -p:NuGetAudit=false
-        shared-library: ../../artifacts/samples/csharp-operator-arrow-roundtrip/RecordBatchProducerOperator/Release/net8.0/win-x64/native/RecordBatchProducerOperator
+        shared-library: ../../artifacts/samples/csharp-operator-arrow-roundtrip/RecordBatchProducerOperator/Release/net8.0/native/RecordBatchProducerOperator
         inputs:
           trigger: producer/trigger
         outputs:
@@ -36,7 +36,7 @@ nodes:
       - id: recordbatch-verifier
         build: |
           dotnet publish RecordBatchVerifierOperator.csproj -c Release -p:NuGetAudit=false
-        shared-library: ../../artifacts/samples/csharp-operator-arrow-roundtrip/RecordBatchVerifierOperator/Release/net8.0/win-x64/native/RecordBatchVerifierOperator
+        shared-library: ../../artifacts/samples/csharp-operator-arrow-roundtrip/RecordBatchVerifierOperator/Release/net8.0/native/RecordBatchVerifierOperator
         inputs:
           batch: batch-producer-runtime/recordbatch-producer/batch
         outputs:

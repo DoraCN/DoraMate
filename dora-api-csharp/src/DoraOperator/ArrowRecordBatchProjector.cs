@@ -9,6 +9,9 @@ namespace DoraOperator;
 /// </summary>
 public static class ArrowRecordBatchProjector
 {
+    /// <summary>
+    /// Projects a string column into a managed row collection.
+    /// </summary>
     public static bool TryProjectStringColumn(
         RecordBatch recordBatch,
         string fieldName,
@@ -30,6 +33,9 @@ public static class ArrowRecordBatchProjector
         return TryProjectStringColumn(column, fieldName, out rows, out error);
     }
 
+    /// <summary>
+    /// Projects an Int32 column into a managed row collection.
+    /// </summary>
     public static bool TryProjectInt32Column(
         RecordBatch recordBatch,
         string fieldName,
@@ -51,6 +57,9 @@ public static class ArrowRecordBatchProjector
         return TryProjectInt32Column(column, fieldName, out rows, out error);
     }
 
+    /// <summary>
+    /// Projects an Int64 column into a managed row collection.
+    /// </summary>
     public static bool TryProjectInt64Column(
         RecordBatch recordBatch,
         string fieldName,
@@ -72,6 +81,9 @@ public static class ArrowRecordBatchProjector
         return TryProjectInt64Column(column, fieldName, out rows, out error);
     }
 
+    /// <summary>
+    /// Projects a Boolean column into a managed row collection.
+    /// </summary>
     public static bool TryProjectBooleanColumn(
         RecordBatch recordBatch,
         string fieldName,
@@ -93,6 +105,9 @@ public static class ArrowRecordBatchProjector
         return TryProjectBooleanColumn(column, fieldName, out rows, out error);
     }
 
+    /// <summary>
+    /// Projects a Float column into a managed row collection.
+    /// </summary>
     public static bool TryProjectFloatColumn(
         RecordBatch recordBatch,
         string fieldName,
@@ -114,6 +129,9 @@ public static class ArrowRecordBatchProjector
         return TryProjectFloatColumn(column, fieldName, out rows, out error);
     }
 
+    /// <summary>
+    /// Projects a Double column into a managed row collection.
+    /// </summary>
     public static bool TryProjectDoubleColumn(
         RecordBatch recordBatch,
         string fieldName,
@@ -135,6 +153,9 @@ public static class ArrowRecordBatchProjector
         return TryProjectDoubleColumn(column, fieldName, out rows, out error);
     }
 
+    /// <summary>
+    /// Projects a Binary column into a managed row collection.
+    /// </summary>
     public static bool TryProjectBinaryColumn(
         RecordBatch recordBatch,
         string fieldName,
@@ -156,6 +177,9 @@ public static class ArrowRecordBatchProjector
         return TryProjectBinaryColumn(column, fieldName, out rows, out error);
     }
 
+    /// <summary>
+    /// Projects a Date32 column into a managed row collection.
+    /// </summary>
     public static bool TryProjectDate32Column(
         RecordBatch recordBatch,
         string fieldName,
@@ -178,6 +202,9 @@ public static class ArrowRecordBatchProjector
         return TryProjectDate32Column(column, fieldName, out rows, out error);
     }
 
+    /// <summary>
+    /// Projects a Timestamp column into a managed row collection.
+    /// </summary>
     public static bool TryProjectTimestampColumn(
         RecordBatch recordBatch,
         string fieldName,
@@ -207,6 +234,9 @@ public static class ArrowRecordBatchProjector
         return TryProjectTimestampColumn(column, fieldName, out rows, out error);
     }
 
+    /// <summary>
+    /// Projects a Decimal128 column into a managed row collection.
+    /// </summary>
     public static bool TryProjectDecimal128Column(
         RecordBatch recordBatch,
         string fieldName,
@@ -236,6 +266,9 @@ public static class ArrowRecordBatchProjector
         return TryProjectDecimal128Column(column, fieldName, out rows, out error);
     }
 
+    /// <summary>
+    /// Projects a Decimal256 column into a managed row collection.
+    /// </summary>
     public static bool TryProjectDecimal256Column(
         RecordBatch recordBatch,
         string fieldName,
@@ -265,6 +298,9 @@ public static class ArrowRecordBatchProjector
         return TryProjectDecimal256Column(column, fieldName, out rows, out error);
     }
 
+    /// <summary>
+    /// Projects a List&lt;String&gt; column into a managed row collection.
+    /// </summary>
     public static bool TryProjectStringListColumn(
         RecordBatch recordBatch,
         string fieldName,
@@ -272,6 +308,9 @@ public static class ArrowRecordBatchProjector
         out string? error) =>
         TryProjectStringListColumn(recordBatch, fieldName, expectedValueFieldName: null, out rows, out error);
 
+    /// <summary>
+    /// Projects a List&lt;String&gt; column into a managed row collection and validates the value-field name when supplied.
+    /// </summary>
     public static bool TryProjectStringListColumn(
         RecordBatch recordBatch,
         string fieldName,
@@ -294,6 +333,9 @@ public static class ArrowRecordBatchProjector
         return TryProjectStringListColumn(column, fieldName, out rows, out error);
     }
 
+    /// <summary>
+    /// Projects a List&lt;Int32&gt; column into a managed row collection.
+    /// </summary>
     public static bool TryProjectInt32ListColumn(
         RecordBatch recordBatch,
         string fieldName,
@@ -301,6 +343,9 @@ public static class ArrowRecordBatchProjector
         out string? error) =>
         TryProjectInt32ListColumn(recordBatch, fieldName, expectedValueFieldName: null, out rows, out error);
 
+    /// <summary>
+    /// Projects a List&lt;Int32&gt; column into a managed row collection and validates the value-field name when supplied.
+    /// </summary>
     public static bool TryProjectInt32ListColumn(
         RecordBatch recordBatch,
         string fieldName,
@@ -323,6 +368,9 @@ public static class ArrowRecordBatchProjector
         return TryProjectInt32ListColumn(column, fieldName, out rows, out error);
     }
 
+    /// <summary>
+    /// Projects a Map&lt;String, Int32&gt; column into a managed row collection.
+    /// </summary>
     public static bool TryProjectStringInt32MapColumn(
         RecordBatch recordBatch,
         string fieldName,
@@ -330,6 +378,9 @@ public static class ArrowRecordBatchProjector
         out string? error) =>
         TryProjectStringInt32MapColumn(recordBatch, fieldName, expectedKeyFieldName: null, expectedValueFieldName: null, out rows, out error);
 
+    /// <summary>
+    /// Projects a Map&lt;String, Int32&gt; column into a managed row collection and validates child-field names when supplied.
+    /// </summary>
     public static bool TryProjectStringInt32MapColumn(
         RecordBatch recordBatch,
         string fieldName,
@@ -359,6 +410,9 @@ public static class ArrowRecordBatchProjector
         return TryProjectStringInt32MapColumn(column, fieldName, out rows, out error);
     }
 
+    /// <summary>
+    /// Projects a struct column into a row collection using a custom row projector.
+    /// </summary>
     public static bool TryProjectStructColumn<TModel>(
         RecordBatch recordBatch,
         string fieldName,
@@ -822,21 +876,70 @@ public sealed class ArrowRecordBatchRowAccessor
         RowIndex = rowIndex;
     }
 
+    /// <summary>
+    /// Gets the current row index within the projected record batch.
+    /// </summary>
     public int RowIndex { get; }
+
+    /// <summary>
+    /// Tries to read a string field from the current row.
+    /// </summary>
     public bool TryGetString(string fieldName, out string value, out string? error) => _projector.TryGetString(RowIndex, fieldName, out value, out error);
+    /// <summary>
+    /// Tries to read an Int32 field from the current row.
+    /// </summary>
     public bool TryGetInt32(string fieldName, out int value, out string? error) => _projector.TryGetInt32(RowIndex, fieldName, out value, out error);
+    /// <summary>
+    /// Tries to read an Int64 field from the current row.
+    /// </summary>
     public bool TryGetInt64(string fieldName, out long value, out string? error) => _projector.TryGetInt64(RowIndex, fieldName, out value, out error);
+    /// <summary>
+    /// Tries to read a Boolean field from the current row.
+    /// </summary>
     public bool TryGetBoolean(string fieldName, out bool value, out string? error) => _projector.TryGetBoolean(RowIndex, fieldName, out value, out error);
+    /// <summary>
+    /// Tries to read a Float field from the current row.
+    /// </summary>
     public bool TryGetFloat(string fieldName, out float value, out string? error) => _projector.TryGetFloat(RowIndex, fieldName, out value, out error);
+    /// <summary>
+    /// Tries to read a Double field from the current row.
+    /// </summary>
     public bool TryGetDouble(string fieldName, out double value, out string? error) => _projector.TryGetDouble(RowIndex, fieldName, out value, out error);
+    /// <summary>
+    /// Tries to read a Binary field from the current row.
+    /// </summary>
     public bool TryGetBinary(string fieldName, out byte[] value, out string? error) => _projector.TryGetBinary(RowIndex, fieldName, out value, out error);
+    /// <summary>
+    /// Tries to read a Date32 field from the current row.
+    /// </summary>
     public bool TryGetDate32(string fieldName, DateUnit expectedUnit, out DateOnly value, out string? error) => _projector.TryGetDate32(RowIndex, fieldName, expectedUnit, out value, out error);
+    /// <summary>
+    /// Tries to read a Timestamp field from the current row.
+    /// </summary>
     public bool TryGetTimestamp(string fieldName, TimeUnit expectedUnit, string? expectedTimezone, out DateTimeOffset value, out string? error) => _projector.TryGetTimestamp(RowIndex, fieldName, expectedUnit, expectedTimezone, out value, out error);
+    /// <summary>
+    /// Tries to read a Decimal128 field from the current row.
+    /// </summary>
     public bool TryGetDecimal128(string fieldName, int expectedPrecision, int expectedScale, out decimal value, out string? error) => _projector.TryGetDecimal128(RowIndex, fieldName, expectedPrecision, expectedScale, out value, out error);
+    /// <summary>
+    /// Tries to read a Decimal256 field from the current row.
+    /// </summary>
     public bool TryGetDecimal256(string fieldName, int expectedPrecision, int expectedScale, out decimal value, out string? error) => _projector.TryGetDecimal256(RowIndex, fieldName, expectedPrecision, expectedScale, out value, out error);
+    /// <summary>
+    /// Tries to read a List&lt;String&gt; field from the current row.
+    /// </summary>
     public bool TryGetStringList(string fieldName, out IReadOnlyList<string> values, out string? error) => _projector.TryGetStringList(RowIndex, fieldName, out values, out error);
+    /// <summary>
+    /// Tries to read a List&lt;Int32&gt; field from the current row.
+    /// </summary>
     public bool TryGetInt32List(string fieldName, out IReadOnlyList<int> values, out string? error) => _projector.TryGetInt32List(RowIndex, fieldName, out values, out error);
+    /// <summary>
+    /// Tries to read a Map&lt;String, Int32&gt; field from the current row.
+    /// </summary>
     public bool TryGetStringInt32Map(string fieldName, out IReadOnlyDictionary<string, int> values, out string? error) => _projector.TryGetStringInt32Map(RowIndex, fieldName, out values, out error);
+    /// <summary>
+    /// Tries to project a nested struct field from the current row.
+    /// </summary>
     public bool TryProjectStruct<TModel>(
         string fieldName,
         IReadOnlyList<string> expectedChildFieldNames,
@@ -847,6 +950,9 @@ public sealed class ArrowRecordBatchRowAccessor
         _projector.TryProjectStruct(RowIndex, fieldName, expectedChildFieldNames, expectedChildTypeIds, projector, out model, out error);
 }
 
+/// <summary>
+/// Projects one record-batch row into a higher-level model.
+/// </summary>
 public delegate bool ArrowRecordBatchRowProjector<TModel>(
     ArrowRecordBatchRowAccessor row,
     out TModel? model,
@@ -1329,21 +1435,70 @@ public sealed class ArrowStructRowAccessor
         RowIndex = rowIndex;
     }
 
+    /// <summary>
+    /// Gets the current row index within the parent struct column.
+    /// </summary>
     public int RowIndex { get; }
+
+    /// <summary>
+    /// Tries to read a string child field from the current struct row.
+    /// </summary>
     public bool TryGetString(string childFieldName, out string value, out string? error) => _projector.TryGetString(RowIndex, childFieldName, out value, out error);
+    /// <summary>
+    /// Tries to read an Int32 child field from the current struct row.
+    /// </summary>
     public bool TryGetInt32(string childFieldName, out int value, out string? error) => _projector.TryGetInt32(RowIndex, childFieldName, out value, out error);
+    /// <summary>
+    /// Tries to read an Int64 child field from the current struct row.
+    /// </summary>
     public bool TryGetInt64(string childFieldName, out long value, out string? error) => _projector.TryGetInt64(RowIndex, childFieldName, out value, out error);
+    /// <summary>
+    /// Tries to read a Boolean child field from the current struct row.
+    /// </summary>
     public bool TryGetBoolean(string childFieldName, out bool value, out string? error) => _projector.TryGetBoolean(RowIndex, childFieldName, out value, out error);
+    /// <summary>
+    /// Tries to read a Float child field from the current struct row.
+    /// </summary>
     public bool TryGetFloat(string childFieldName, out float value, out string? error) => _projector.TryGetFloat(RowIndex, childFieldName, out value, out error);
+    /// <summary>
+    /// Tries to read a Double child field from the current struct row.
+    /// </summary>
     public bool TryGetDouble(string childFieldName, out double value, out string? error) => _projector.TryGetDouble(RowIndex, childFieldName, out value, out error);
+    /// <summary>
+    /// Tries to read a Binary child field from the current struct row.
+    /// </summary>
     public bool TryGetBinary(string childFieldName, out byte[] value, out string? error) => _projector.TryGetBinary(RowIndex, childFieldName, out value, out error);
+    /// <summary>
+    /// Tries to read a Date32 child field from the current struct row.
+    /// </summary>
     public bool TryGetDate32(string childFieldName, DateUnit expectedUnit, out DateOnly value, out string? error) => _projector.TryGetDate32(RowIndex, childFieldName, expectedUnit, out value, out error);
+    /// <summary>
+    /// Tries to read a Timestamp child field from the current struct row.
+    /// </summary>
     public bool TryGetTimestamp(string childFieldName, TimeUnit expectedUnit, string? expectedTimezone, out DateTimeOffset value, out string? error) => _projector.TryGetTimestamp(RowIndex, childFieldName, expectedUnit, expectedTimezone, out value, out error);
+    /// <summary>
+    /// Tries to read a Decimal128 child field from the current struct row.
+    /// </summary>
     public bool TryGetDecimal128(string childFieldName, int expectedPrecision, int expectedScale, out decimal value, out string? error) => _projector.TryGetDecimal128(RowIndex, childFieldName, expectedPrecision, expectedScale, out value, out error);
+    /// <summary>
+    /// Tries to read a Decimal256 child field from the current struct row.
+    /// </summary>
     public bool TryGetDecimal256(string childFieldName, int expectedPrecision, int expectedScale, out decimal value, out string? error) => _projector.TryGetDecimal256(RowIndex, childFieldName, expectedPrecision, expectedScale, out value, out error);
+    /// <summary>
+    /// Tries to read a List&lt;String&gt; child field from the current struct row.
+    /// </summary>
     public bool TryGetStringList(string childFieldName, out IReadOnlyList<string> values, out string? error) => _projector.TryGetStringList(RowIndex, childFieldName, out values, out error);
+    /// <summary>
+    /// Tries to read a List&lt;Int32&gt; child field from the current struct row.
+    /// </summary>
     public bool TryGetInt32List(string childFieldName, out IReadOnlyList<int> values, out string? error) => _projector.TryGetInt32List(RowIndex, childFieldName, out values, out error);
+    /// <summary>
+    /// Tries to read a Map&lt;String, Int32&gt; child field from the current struct row.
+    /// </summary>
     public bool TryGetStringInt32Map(string childFieldName, out IReadOnlyDictionary<string, int> values, out string? error) => _projector.TryGetStringInt32Map(RowIndex, childFieldName, out values, out error);
+    /// <summary>
+    /// Tries to project a nested struct child field from the current struct row.
+    /// </summary>
     public bool TryProjectStruct<TModel>(
         string childFieldName,
         IReadOnlyList<string> expectedChildFieldNames,
@@ -1354,6 +1509,9 @@ public sealed class ArrowStructRowAccessor
         _projector.TryProjectStruct(RowIndex, childFieldName, expectedChildFieldNames, expectedChildTypeIds, projector, out model, out error);
 }
 
+/// <summary>
+/// Projects one struct-row view into a higher-level model.
+/// </summary>
 public delegate bool ArrowStructRowProjector<TModel>(
     ArrowStructRowAccessor row,
     out TModel? model,

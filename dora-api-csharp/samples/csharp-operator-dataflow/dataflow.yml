@@ -21,7 +21,7 @@ nodes:
       - id: csharp-operator
         build: |
           dotnet publish CSharpCounterOperator.csproj -c Release -p:NuGetAudit=false
-        shared-library: ../../artifacts/samples/csharp-operator-dataflow/CSharpCounterOperator/Release/net8.0/win-x64/native/CSharpCounterOperator
+        shared-library: ../../artifacts/samples/csharp-operator-dataflow/CSharpCounterOperator/Release/net8.0/native/CSharpCounterOperator
         inputs:
           message: producer/message
         outputs:

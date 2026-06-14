@@ -2,13 +2,30 @@ using System.Text;
 
 namespace DoraOperator;
 
+/// <summary>
+/// Indicates how the operator runtime should proceed after handling an event.
+/// </summary>
 public enum DoraStatus : byte
 {
+    /// <summary>
+    /// Continue processing subsequent events.
+    /// </summary>
     Continue = 0,
+
+    /// <summary>
+    /// Stop the current operator.
+    /// </summary>
     Stop = 1,
+
+    /// <summary>
+    /// Stop the entire dataflow.
+    /// </summary>
     StopAll = 2
 }
 
+/// <summary>
+/// Represents an input payload delivered to an operator.
+/// </summary>
 public sealed class Input
 {
     private readonly object _sync = new();
@@ -26,9 +43,19 @@ public sealed class Input
         _nativeAccessAllowed = nativeInput != 0;
     }
 
+    /// <summary>
+    /// Gets the Dora input ID that produced this payload.
+    /// </summary>
     public string Id { get; }
+
+    /// <summary>
+    /// Gets the byte payload, materializing it on first access.
+    /// </summary>
     public byte[] Data => GetData();
 
+    /// <summary>
+    /// Gets a value indicating whether the input currently exposes a byte payload.
+    /// </summary>
     public bool HasBytes
     {
         get
@@ -50,6 +77,9 @@ public sealed class Input
         }
     }
 
+    /// <summary>
+    /// Gets a value indicating whether the input currently exposes an Arrow payload.
+    /// </summary>
     public bool HasArrow
     {
         get
@@ -66,8 +96,14 @@ public sealed class Input
         }
     }
 
+    /// <summary>
+    /// Gets the serialized OpenTelemetry context attached to the input, when present.
+    /// </summary>
     public string? OpenTelemetryContext { get; }
 
+    /// <summary>
+    /// Materializes the input as a byte payload.
+    /// </summary>
     public byte[] GetData()
     {
         lock (_sync)
@@ -104,6 +140,9 @@ public sealed class Input
         }
     }
 
+    /// <summary>
+    /// Attempts to take ownership of the input as an Arrow payload.
+    /// </summary>
     public bool TryTakeArrowPayload(out ArrowPayload? payload)
     {
         lock (_sync)
@@ -124,6 +163,9 @@ public sealed class Input
         }
     }
 
+    /// <summary>
+    /// Decodes the byte payload as a UTF-8 string.
+    /// </summary>
     public string GetUtf8String()
     {
         return Encoding.UTF8.GetString(Data);
@@ -166,11 +208,29 @@ public sealed class Input
     }
 }
 
+/// <summary>
+/// Represents a low-level operator event before it is projected into higher-level event types.
+/// </summary>
 public sealed class RawEvent
 {
+    /// <summary>
+    /// Gets the input payload when the event represents an input.
+    /// </summary>
     public Input? Input { get; init; }
+
+    /// <summary>
+    /// Gets the input ID that was closed for input-closed events.
+    /// </summary>
     public string InputClosed { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets a value indicating whether the runtime requested the operator to stop.
+    /// </summary>
     public bool Stop { get; init; }
+
+    /// <summary>
+    /// Gets the raw runtime error message for error events.
+    /// </summary>
     public string Error { get; init; } = string.Empty;
 
     internal void InvalidateNativeAccess()
@@ -179,49 +239,135 @@ public sealed class RawEvent
     }
 }
 
+/// <summary>
+/// Delegate used by the low-level operator runtime to send byte outputs.
+/// </summary>
 public delegate DoraResult SendOutput(string outputId, byte[] data);
 
+/// <summary>
+/// Represents the outcome of a Dora operator runtime operation.
+/// </summary>
 public sealed class DoraResult
 {
+    /// <summary>
+    /// Gets a value indicating whether the operation succeeded.
+    /// </summary>
     public bool IsSuccess { get; init; }
+
+    /// <summary>
+    /// Gets the error message when the operation failed.
+    /// </summary>
     public string? Error { get; init; }
 
+    /// <summary>
+    /// Creates a successful result.
+    /// </summary>
     public static DoraResult Ok() => new() { IsSuccess = true };
+
+    /// <summary>
+    /// Creates a failed result with a plain error message.
+    /// </summary>
     public static DoraResult Err(string error) => new() { IsSuccess = false, Error = error };
+
+    /// <summary>
+    /// Creates a failed result with an SDK-formatted error code and message.
+    /// </summary>
     public static DoraResult Err(DoraOperatorErrorCode errorCode, string error) =>
         new() { IsSuccess = false, Error = DoraOperatorRuntimeErrors.FormatMessage(errorCode, error) };
+
+    /// <summary>
+    /// Creates a failed result from an exception.
+    /// </summary>
     public static DoraResult Err(Exception exception) =>
         new() { IsSuccess = false, Error = DoraOperatorRuntimeErrors.FormatException(exception) };
 }
 
+/// <summary>
+/// Represents the outcome of operator initialization.
+/// </summary>
 public sealed class InitResult
 {
+    /// <summary>
+    /// Gets a value indicating whether initialization succeeded.
+    /// </summary>
     public bool IsSuccess { get; init; }
+
+    /// <summary>
+    /// Gets the error message when initialization failed.
+    /// </summary>
     public string? Error { get; init; }
+
+    /// <summary>
+    /// Gets the native operator context pointer returned to the runtime.
+    /// </summary>
     public nint OperatorContext { get; init; }
 
+    /// <summary>
+    /// Creates a successful initialization result.
+    /// </summary>
     public static InitResult Ok(nint operatorContext = 0) =>
         new() { IsSuccess = true, OperatorContext = operatorContext };
+
+    /// <summary>
+    /// Creates a failed initialization result with a plain error message.
+    /// </summary>
     public static InitResult Err(string error) =>
         new() { IsSuccess = false, Error = error };
+
+    /// <summary>
+    /// Creates a failed initialization result with an SDK-formatted error code and message.
+    /// </summary>
     public static InitResult Err(DoraOperatorErrorCode errorCode, string error) =>
         new() { IsSuccess = false, Error = DoraOperatorRuntimeErrors.FormatMessage(errorCode, error) };
+
+    /// <summary>
+    /// Creates a failed initialization result from an exception.
+    /// </summary>
     public static InitResult Err(Exception exception) =>
         new() { IsSuccess = false, Error = DoraOperatorRuntimeErrors.FormatException(exception) };
 }
 
+/// <summary>
+/// Represents the outcome of handling a single operator event.
+/// </summary>
 public sealed class OnEventResult
 {
+    /// <summary>
+    /// Gets a value indicating whether event handling succeeded.
+    /// </summary>
     public bool IsSuccess { get; init; }
+
+    /// <summary>
+    /// Gets the error message when event handling failed.
+    /// </summary>
     public string? Error { get; init; }
+
+    /// <summary>
+    /// Gets the runtime status that should be returned to Dora.
+    /// </summary>
     public DoraStatus Status { get; init; }
 
+    /// <summary>
+    /// Creates a successful result that continues processing.
+    /// </summary>
     public static OnEventResult Continue() =>
         new() { IsSuccess = true, Status = DoraStatus.Continue };
+
+    /// <summary>
+    /// Creates a successful result that requests the operator or the entire dataflow to stop.
+    /// </summary>
     public static OnEventResult Stop(bool stopAll = false) =>
         new() { IsSuccess = true, Status = stopAll ? DoraStatus.StopAll : DoraStatus.Stop };
+
+    /// <summary>
+    /// Creates a failed event result with a plain error message.
+    /// </summary>
     public static OnEventResult Err(string error) =>
         new() { IsSuccess = false, Error = error, Status = DoraStatus.Continue };
+
+    /// <summary>
+    /// Creates a failed event result with an SDK-formatted error code and message.
+    /// </summary>
     public static OnEventResult Err(DoraOperatorErrorCode errorCode, string error) =>
         new()
         {
@@ -229,6 +375,10 @@ public sealed class OnEventResult
             Error = DoraOperatorRuntimeErrors.FormatMessage(errorCode, error),
             Status = DoraStatus.Continue
         };
+
+    /// <summary>
+    /// Creates a failed event result from an exception.
+    /// </summary>
     public static OnEventResult Err(Exception exception) =>
         new()
         {

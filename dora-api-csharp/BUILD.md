@@ -167,7 +167,7 @@ artifacts/
 artifacts/dotnet/DoraNode/Release/net8.0/
 artifacts/dotnet/DoraOperator/Release/net8.0/
 artifacts/samples/csharp-dataflow/CSharpNode/Release/net8.0/
-artifacts/samples/csharp-operator-arrow-roundtrip/RecordBatchProducerOperator/Release/net8.0/win-x64/
+artifacts/samples/csharp-operator-arrow-roundtrip/RecordBatchProducerOperator/Release/net8.0/native/
 ```
 
 ## 推荐验证路径

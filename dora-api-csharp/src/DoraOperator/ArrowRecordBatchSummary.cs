@@ -20,13 +20,39 @@ public sealed class ArrowRecordBatchSummary
         TypeIds = typeIds;
     }
 
+    /// <summary>
+    /// Gets the row count of the summarized record batch.
+    /// </summary>
     public long RowCount { get; }
+
+    /// <summary>
+    /// Gets the column count of the summarized record batch.
+    /// </summary>
     public int ColumnCount { get; }
+
+    /// <summary>
+    /// Gets the field names in schema order.
+    /// </summary>
     public IReadOnlyList<string> FieldNames { get; }
+
+    /// <summary>
+    /// Gets the Arrow type IDs in schema order.
+    /// </summary>
     public IReadOnlyList<ArrowTypeId> TypeIds { get; }
+
+    /// <summary>
+    /// Gets the field names joined as a comma-separated string.
+    /// </summary>
     public string FieldsCsv => string.Join(",", FieldNames);
+
+    /// <summary>
+    /// Gets the type IDs joined as a comma-separated string.
+    /// </summary>
     public string TypesCsv => string.Join(",", TypeIds);
 
+    /// <summary>
+    /// Creates a summary from a record batch.
+    /// </summary>
     public static ArrowRecordBatchSummary Create(RecordBatch recordBatch)
     {
         ArgumentNullException.ThrowIfNull(recordBatch);
@@ -37,6 +63,9 @@ public sealed class ArrowRecordBatchSummary
         return new ArrowRecordBatchSummary(recordBatch.Length, recordBatch.ColumnCount, fieldNames, typeIds);
     }
 
+    /// <summary>
+    /// Formats the summary as a single-line string with a custom prefix token.
+    /// </summary>
     public string ToSummaryString(string prefix)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(prefix);

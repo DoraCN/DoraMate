@@ -7,42 +7,63 @@ namespace DoraNode;
 /// </summary>
 public static class DoraNodeOutputExtensions
 {
+    /// <summary>
+    /// Sends a byte payload to the specified node output.
+    /// </summary>
     public static bool Send(this DoraNode node, string outputId, byte[] data)
     {
         ArgumentNullException.ThrowIfNull(node);
         return node.SendOutput(outputId, data);
     }
 
+    /// <summary>
+    /// Sends a byte payload and throws when the send fails.
+    /// </summary>
     public static void SendOrThrow(this DoraNode node, string outputId, byte[] data)
     {
         ArgumentNullException.ThrowIfNull(node);
         node.SendOutputOrThrow(outputId, data);
     }
 
+    /// <summary>
+    /// Sends a byte payload from a memory buffer to the specified node output.
+    /// </summary>
     public static bool Send(this DoraNode node, string outputId, ReadOnlyMemory<byte> data)
     {
         ArgumentNullException.ThrowIfNull(node);
         return node.SendOutput(outputId, data.ToArray());
     }
 
+    /// <summary>
+    /// Sends a byte payload from a memory buffer and throws when the send fails.
+    /// </summary>
     public static void SendOrThrow(this DoraNode node, string outputId, ReadOnlyMemory<byte> data)
     {
         ArgumentNullException.ThrowIfNull(node);
         node.SendOutputOrThrow(outputId, data.ToArray());
     }
 
+    /// <summary>
+    /// Sends a UTF-8 string payload to the specified node output.
+    /// </summary>
     public static bool Send(this DoraNode node, string outputId, string data)
     {
         ArgumentNullException.ThrowIfNull(node);
         return node.SendOutput(outputId, data);
     }
 
+    /// <summary>
+    /// Sends a UTF-8 string payload and throws when the send fails.
+    /// </summary>
     public static void SendOrThrow(this DoraNode node, string outputId, string data)
     {
         ArgumentNullException.ThrowIfNull(node);
         node.SendOutputOrThrow(outputId, data);
     }
 
+    /// <summary>
+    /// Sends an Arrow payload to the specified node output.
+    /// </summary>
     public static bool Send(this DoraNode node, string outputId, ArrowPayload payload)
     {
         ArgumentNullException.ThrowIfNull(node);
@@ -50,6 +71,9 @@ public static class DoraNodeOutputExtensions
         return node.SendArrow(outputId, payload);
     }
 
+    /// <summary>
+    /// Sends an Arrow payload and throws when the send fails.
+    /// </summary>
     public static void SendOrThrow(this DoraNode node, string outputId, ArrowPayload payload)
     {
         ArgumentNullException.ThrowIfNull(node);
@@ -57,6 +81,9 @@ public static class DoraNodeOutputExtensions
         node.SendArrowOrThrow(outputId, payload);
     }
 
+    /// <summary>
+    /// Sends an Arrow array/schema pair to the specified node output.
+    /// </summary>
     public static bool Send(this DoraNode node, string outputId, ArrowArray array, ArrowSchema schema)
     {
         ArgumentNullException.ThrowIfNull(node);
@@ -65,6 +92,9 @@ public static class DoraNodeOutputExtensions
         return node.SendArrow(outputId, array, schema);
     }
 
+    /// <summary>
+    /// Sends an Arrow array/schema pair and throws when the send fails.
+    /// </summary>
     public static void SendOrThrow(this DoraNode node, string outputId, ArrowArray array, ArrowSchema schema)
     {
         ArgumentNullException.ThrowIfNull(node);
@@ -73,6 +103,9 @@ public static class DoraNodeOutputExtensions
         node.SendArrowOrThrow(outputId, array, schema);
     }
 
+    /// <summary>
+    /// Sends an Arrow record batch to the specified node output.
+    /// </summary>
     public static bool Send(this DoraNode node, string outputId, RecordBatch recordBatch)
     {
         ArgumentNullException.ThrowIfNull(node);
@@ -80,6 +113,9 @@ public static class DoraNodeOutputExtensions
         return node.SendRecordBatch(outputId, recordBatch);
     }
 
+    /// <summary>
+    /// Sends an Arrow record batch and throws when the send fails.
+    /// </summary>
     public static void SendOrThrow(this DoraNode node, string outputId, RecordBatch recordBatch)
     {
         ArgumentNullException.ThrowIfNull(node);
@@ -87,6 +123,9 @@ public static class DoraNodeOutputExtensions
         node.SendRecordBatchOrThrow(outputId, recordBatch);
     }
 
+    /// <summary>
+    /// Sends a unified payload wrapper to the specified node output.
+    /// </summary>
     public static bool Send(this DoraNode node, string outputId, DoraOutputPayload payload)
     {
         ArgumentNullException.ThrowIfNull(node);
@@ -103,6 +142,9 @@ public static class DoraNodeOutputExtensions
         };
     }
 
+    /// <summary>
+    /// Sends a unified payload wrapper and throws when the send fails.
+    /// </summary>
     public static void SendOrThrow(this DoraNode node, string outputId, DoraOutputPayload payload)
     {
         ArgumentNullException.ThrowIfNull(node);

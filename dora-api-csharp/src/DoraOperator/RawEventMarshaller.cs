@@ -69,7 +69,16 @@ internal static class RawEventMarshaller
     private static string? ReadOpenTelemetryContext(IntPtr nativeInput)
     {
         NativeMethods.EnsureLoaded();
-        var contextPtr = NativeMethods.ReadInputOpenTelemetryContext(nativeInput);
+        IntPtr contextPtr;
+        try
+        {
+            contextPtr = NativeMethods.ReadInputOpenTelemetryContext(nativeInput);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return null;
+        }
+
         try
         {
             return contextPtr == IntPtr.Zero
@@ -80,7 +89,14 @@ internal static class RawEventMarshaller
         {
             if (contextPtr != IntPtr.Zero)
             {
-                NativeMethods.FreeInputOpenTelemetryContext(contextPtr);
+                try
+                {
+                    NativeMethods.FreeInputOpenTelemetryContext(contextPtr);
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    // Older/minimal native APIs may expose the string without a paired free routine.
+                }
             }
         }
     }

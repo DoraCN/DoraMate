@@ -72,7 +72,7 @@ internal static class SendOutputBridge
         }
         finally
         {
-            NativeMethods.FreeResult(nativeResult);
+            TryFreeResult(nativeResult);
         }
     }
 
@@ -124,7 +124,7 @@ internal static class SendOutputBridge
         }
         finally
         {
-            NativeMethods.FreeResult(nativeResult);
+            TryFreeResult(nativeResult);
         }
     }
 
@@ -161,7 +161,19 @@ internal static class SendOutputBridge
         }
         finally
         {
+            TryFreeResult(nativeResult);
+        }
+    }
+
+    private static void TryFreeResult(NativeTypes.NativeDoraResult nativeResult)
+    {
+        try
+        {
             NativeMethods.FreeResult(nativeResult);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            // Minimal native APIs may not expose an explicit free helper.
         }
     }
 

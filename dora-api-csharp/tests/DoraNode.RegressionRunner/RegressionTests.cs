@@ -2,22 +2,25 @@ using CSharpAdvancedArrowNodeDataflow;
 using CSharpArrowNodeDataflow;
 using CSharpComplexArrowNodeDataflow;
 using DoraNode;
+using Xunit;
 
 namespace DoraNodeRegressionRunner;
 
-internal static class RegressionTests
+public sealed class RegressionTests
 {
-    public static void RoundtripSummaryMatchesStandaloneExampleOutput()
+    [Fact]
+    public void RoundtripSummaryMatchesStandaloneExampleOutput()
     {
         using var batch = RichArrowContract.CreateRecordBatch();
         var summary = ArrowRecordBatchSummary.Create(batch).ToSummaryString("NODE_ARROW_ROUNDTRIP_OK");
-        Expect.Equal(
+        TestAssert.Equal(
             "NODE_ARROW_ROUNDTRIP_OK fields=name,count,active,total,ratio,score cols=6 rows=2 types=String,Int32,Boolean,Int64,Float,Double",
             summary,
             "roundtrip summary");
     }
 
-    public static void RoundtripSchemaValidationRejectsSchemaMismatch()
+    [Fact]
+    public void RoundtripSchemaValidationRejectsSchemaMismatch()
     {
         using var batch = RichArrowContract.CreateRecordBatch(firstFieldName: "label");
         var succeeded = ArrowSchemaValidation.TryValidateRecordBatch(
@@ -27,11 +30,12 @@ internal static class RegressionTests
             RichArrowContract.ExpectedTypeIds,
             out var error);
 
-        Expect.False(succeeded, "schema mismatch should fail validation");
-        Expect.Equal("Expected field 0 to be 'name' but got 'label'.", error!, "schema mismatch error");
+        TestAssert.False(succeeded, "schema mismatch should fail validation");
+        TestAssert.Equal("Expected field 0 to be 'name' but got 'label'.", error!, "schema mismatch error");
     }
 
-    public static void RoundtripSchemaValidationRejectsEmptyBatch()
+    [Fact]
+    public void RoundtripSchemaValidationRejectsEmptyBatch()
     {
         using var batch = RichArrowContract.CreateRecordBatch(empty: true);
         var succeeded = ArrowSchemaValidation.TryValidateRecordBatch(
@@ -41,52 +45,55 @@ internal static class RegressionTests
             RichArrowContract.ExpectedTypeIds,
             out var error);
 
-        Expect.False(succeeded, "empty batch should fail validation");
-        Expect.Equal("Expected 2 rows but got 0.", error!, "empty batch error");
+        TestAssert.False(succeeded, "empty batch should fail validation");
+        TestAssert.Equal("Expected 2 rows but got 0.", error!, "empty batch error");
     }
 
-    public static void RoundtripAssertionsCoverBasicScalarColumns()
+    [Fact]
+    public void RoundtripAssertionsCoverBasicScalarColumns()
     {
         using var batch = RichArrowContract.CreateRecordBatch();
 
-        Expect.True(
+        TestAssert.True(
             ArrowRecordBatchAssertions.TryGetStringColumn(batch, RichArrowContract.ExpectedFieldNames[0], RichArrowContract.ExpectedNames, out _, out var error),
             error);
-        Expect.True(
+        TestAssert.True(
             ArrowRecordBatchAssertions.TryGetInt32Column(batch, RichArrowContract.ExpectedFieldNames[1], RichArrowContract.ExpectedCounts, out _, out error),
             error);
-        Expect.True(
+        TestAssert.True(
             ArrowRecordBatchAssertions.TryGetBooleanColumn(batch, RichArrowContract.ExpectedFieldNames[2], RichArrowContract.ExpectedActive, out _, out error),
             error);
-        Expect.True(
+        TestAssert.True(
             ArrowRecordBatchAssertions.TryGetInt64Column(batch, RichArrowContract.ExpectedFieldNames[3], RichArrowContract.ExpectedTotals, out _, out error),
             error);
-        Expect.True(
+        TestAssert.True(
             ArrowRecordBatchAssertions.TryGetFloatColumn(batch, RichArrowContract.ExpectedFieldNames[4], RichArrowContract.ExpectedRatios, out _, out error),
             error);
-        Expect.True(
+        TestAssert.True(
             ArrowRecordBatchAssertions.TryGetDoubleColumn(batch, RichArrowContract.ExpectedFieldNames[5], RichArrowContract.ExpectedScores, out _, out error),
             error);
     }
 
-    public static void AdvancedSummaryMatchesStandaloneExampleOutput()
+    [Fact]
+    public void AdvancedSummaryMatchesStandaloneExampleOutput()
     {
         using var batch = RichAdvancedArrowContract.CreateRecordBatch();
         var summary = ArrowRecordBatchSummary.Create(batch).ToSummaryString("NODE_ARROW_ADVANCED_OK");
-        Expect.Equal(
+        TestAssert.Equal(
             "NODE_ARROW_ADVANCED_OK fields=id,created,event_time,payload cols=4 rows=2 types=Int32,Date32,Timestamp,Binary",
             summary,
             "advanced summary");
     }
 
-    public static void AdvancedAssertionsCoverDateTimestampBinaryColumns()
+    [Fact]
+    public void AdvancedAssertionsCoverDateTimestampBinaryColumns()
     {
         using var batch = RichAdvancedArrowContract.CreateRecordBatch();
 
-        Expect.True(
+        TestAssert.True(
             ArrowRecordBatchAssertions.TryGetInt32Column(batch, RichAdvancedArrowContract.ExpectedFieldNames[0], RichAdvancedArrowContract.ExpectedIds, out _, out var error),
             error);
-        Expect.True(
+        TestAssert.True(
             ArrowRecordBatchAssertions.TryGetDate32Column(
                 batch,
                 RichAdvancedArrowContract.ExpectedFieldNames[1],
@@ -95,7 +102,7 @@ internal static class RegressionTests
                 out _,
                 out error),
             error);
-        Expect.True(
+        TestAssert.True(
             ArrowRecordBatchAssertions.TryGetTimestampColumn(
                 batch,
                 RichAdvancedArrowContract.ExpectedFieldNames[2],
@@ -105,16 +112,17 @@ internal static class RegressionTests
                 out _,
                 out error),
             error);
-        Expect.True(
+        TestAssert.True(
             ArrowRecordBatchAssertions.TryGetBinaryColumn(batch, RichAdvancedArrowContract.ExpectedFieldNames[3], RichAdvancedArrowContract.ExpectedPayloads, out _, out error),
             error);
     }
 
-    public static void ComplexListAndStructProjectorsMatchStandaloneModels()
+    [Fact]
+    public void ComplexListAndStructProjectorsMatchStandaloneModels()
     {
         using var batch = RichComplexArrowContract.CreateRecordBatch();
 
-        Expect.True(
+        TestAssert.True(
             ArrowRecordBatchProjector.TryProjectStringListColumn(
                 batch,
                 RichComplexArrowContract.TagsFieldName,
@@ -126,9 +134,9 @@ internal static class RegressionTests
         var expectedTags = RichComplexArrowContract.ExpectedTags
             .Select(static row => (IReadOnlyList<string>)row)
             .ToArray();
-        Expect.SequenceMatrixEqual(expectedTags, tagRows, "tags");
+        TestAssert.SequenceMatrixEqual(expectedTags, tagRows, "tags");
 
-        Expect.True(
+        TestAssert.True(
             ArrowRecordBatchProjector.TryProjectStructColumn(
                 batch,
                 RichComplexArrowContract.MetaFieldName,
@@ -152,115 +160,41 @@ internal static class RegressionTests
                 out error),
             error);
 
-        Expect.NotNull(metaRows, "meta rows");
-        Expect.Equal(RichComplexArrowContract.ExpectedRowCount, metaRows!.Count, "meta row count");
+        TestAssert.NotNull(metaRows, "meta rows");
+        TestAssert.Equal(RichComplexArrowContract.ExpectedRowCount, metaRows!.Count, "meta row count");
         for (var rowIndex = 0; rowIndex < metaRows.Count; rowIndex++)
         {
-            Expect.Equal(RichComplexArrowContract.ExpectedSources[rowIndex], metaRows[rowIndex].Source, $"meta row {rowIndex} source");
-            Expect.Equal(RichComplexArrowContract.ExpectedPriorities[rowIndex], metaRows[rowIndex].Priority, $"meta row {rowIndex} priority");
+            TestAssert.Equal(RichComplexArrowContract.ExpectedSources[rowIndex], metaRows[rowIndex].Source, $"meta row {rowIndex} source");
+            TestAssert.Equal(RichComplexArrowContract.ExpectedPriorities[rowIndex], metaRows[rowIndex].Priority, $"meta row {rowIndex} priority");
         }
     }
 
-    public static void ComplexContractProjectsExpectedModel()
+    [Fact]
+    public void ComplexContractProjectsExpectedModel()
     {
         using var batch = RichComplexArrowContract.CreateRecordBatch();
-        Expect.True(RichComplexArrowContract.Contract.TryRead(batch, out ComplexBatchModel? model, out var error), error);
-        Expect.NotNull(model, "contract model");
-        Expect.True(RichComplexArrowContract.TryValidateModel(model!, out error), error);
+        TestAssert.True(RichComplexArrowContract.Contract.TryRead(batch, out ComplexBatchModel? model, out var error), error);
+        TestAssert.NotNull(model, "contract model");
+        TestAssert.True(RichComplexArrowContract.TryValidateModel(model!, out error), error);
     }
 
-    public static void ComplexContractFailureSummaryMatchesStandaloneExampleFormat()
+    [Fact]
+    public void ComplexContractFailureSummaryMatchesStandaloneExampleFormat()
     {
         using var batch = RichComplexArrowContract.CreateRecordBatch(invalidNestedPriorityType: true);
         var succeeded = RichComplexArrowContract.Contract.TryRead(batch, out _, out var error);
 
-        Expect.False(succeeded, "invalid nested type should fail contract projection");
-        Expect.NotNull(error, "contract error");
+        TestAssert.False(succeeded, "invalid nested type should fail contract projection");
+        TestAssert.NotNull(error, "contract error");
 
         var summary = RichComplexArrowContract.CreateExpectedContractFailureSummary(
             DoraNodeErrorCode.ContractValidationFailed,
             error!);
 
-        Expect.Contains(
+        TestAssert.Contains(
             summary,
             "NODE_ARROW_COMPLEX_EXPECTED_CONTRACT_FAILURE_OK code=ContractValidationFailed",
             "failure summary prefix");
-        Expect.Contains(summary, "meta.priority", "failure summary path");
-    }
-}
-
-internal static class Expect
-{
-    public static void True(bool condition, string? message)
-    {
-        if (!condition)
-        {
-            throw new InvalidOperationException(message ?? "Expected condition to be true.");
-        }
-    }
-
-    public static void False(bool condition, string message)
-    {
-        if (condition)
-        {
-            throw new InvalidOperationException(message);
-        }
-    }
-
-    public static void NotNull<T>(T? value, string label)
-    {
-        if (value is null)
-        {
-            throw new InvalidOperationException($"Expected '{label}' to be non-null.");
-        }
-    }
-
-    public static void Equal<T>(T expected, T actual, string label)
-        where T : notnull
-    {
-        if (!EqualityComparer<T>.Default.Equals(expected, actual))
-        {
-            throw new InvalidOperationException($"Expected {label} to be '{expected}' but got '{actual}'.");
-        }
-    }
-
-    public static void SequenceEqual<T>(IReadOnlyList<T> expected, IReadOnlyList<T>? actual, string label)
-    {
-        NotNull(actual, label);
-        if (expected.Count != actual!.Count)
-        {
-            throw new InvalidOperationException($"Expected {label} to contain {expected.Count} values but got {actual.Count}.");
-        }
-
-        for (var index = 0; index < expected.Count; index++)
-        {
-            var actualValue = actual[index];
-            if (!EqualityComparer<T>.Default.Equals(expected[index], actualValue))
-            {
-                throw new InvalidOperationException($"Expected {label}[{index}] to be '{expected[index]}' but got '{actualValue}'.");
-            }
-        }
-    }
-
-    public static void SequenceMatrixEqual<T>(IReadOnlyList<IReadOnlyList<T>> expected, IReadOnlyList<IReadOnlyList<T>>? actual, string label)
-    {
-        NotNull(actual, label);
-        if (expected.Count != actual!.Count)
-        {
-            throw new InvalidOperationException($"Expected {label} to contain {expected.Count} rows but got {actual.Count}.");
-        }
-
-        for (var rowIndex = 0; rowIndex < expected.Count; rowIndex++)
-        {
-            SequenceEqual(expected[rowIndex], actual![rowIndex], $"{label}[{rowIndex}]");
-        }
-    }
-
-    public static void Contains(string? actual, string expectedSubstring, string label)
-    {
-        if (actual is null || actual.IndexOf(expectedSubstring, StringComparison.Ordinal) < 0)
-        {
-            throw new InvalidOperationException($"Expected {label} to contain '{expectedSubstring}' but got '{actual ?? "<null>"}'.");
-        }
+        TestAssert.Contains(summary, "meta.priority", "failure summary path");
     }
 }

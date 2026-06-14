@@ -7,23 +7,85 @@ namespace DoraOperator;
 /// </summary>
 public enum DoraOperatorErrorCode
 {
+    /// <summary>
+    /// An unspecified DoraOperator failure occurred.
+    /// </summary>
     Unknown = 0,
+
+    /// <summary>
+    /// The native Dora operator library could not be loaded.
+    /// </summary>
     NativeLibraryLoadFailed,
+
+    /// <summary>
+    /// Operator initialization failed.
+    /// </summary>
     InitializationFailed,
+
+    /// <summary>
+    /// Operator event handling failed.
+    /// </summary>
     EventHandlingFailed,
+
+    /// <summary>
+    /// Operator shutdown or cleanup failed.
+    /// </summary>
     DropFailed,
+
+    /// <summary>
+    /// Sending a byte or text output failed.
+    /// </summary>
     OutputSendFailed,
+
+    /// <summary>
+    /// Sending an Arrow payload failed.
+    /// </summary>
     ArrowOutputSendFailed,
+
+    /// <summary>
+    /// Sending an Arrow record batch failed.
+    /// </summary>
     RecordBatchOutputSendFailed,
+
+    /// <summary>
+    /// Converting an Arrow payload to IPC bytes failed.
+    /// </summary>
     ArrowPayloadConversionFailed,
+
+    /// <summary>
+    /// An expected Arrow payload was missing.
+    /// </summary>
     ArrowPayloadMissing,
+
+    /// <summary>
+    /// Arrow schema validation failed.
+    /// </summary>
     SchemaValidationFailed,
+
+    /// <summary>
+    /// Contract projection from an Arrow record batch failed.
+    /// </summary>
     ContractValidationFailed,
+
+    /// <summary>
+    /// The caller violated a managed lifecycle rule.
+    /// </summary>
     LifecycleViolation,
+
+    /// <summary>
+    /// A native handle was invalid or unusable.
+    /// </summary>
     InvalidNativeHandle,
+
+    /// <summary>
+    /// The operator context pointer was invalid.
+    /// </summary>
     InvalidOperatorContext,
 }
 
+/// <summary>
+/// Structured diagnostics for native Dora operator library discovery and loading.
+/// </summary>
 public sealed class DoraNativeLibraryDiagnostics
 {
     internal DoraNativeLibraryDiagnostics(
@@ -38,12 +100,30 @@ public sealed class DoraNativeLibraryDiagnostics
         CandidatePaths = candidatePaths;
     }
 
+    /// <summary>
+    /// Gets the logical native library name used for P/Invoke resolution.
+    /// </summary>
     public string LibraryName { get; }
+
+    /// <summary>
+    /// Gets the platform-specific native library file name.
+    /// </summary>
     public string LibraryFileName { get; }
+
+    /// <summary>
+    /// Gets the library path that was successfully loaded, when available.
+    /// </summary>
     public string? LoadedLibraryPath { get; }
+
+    /// <summary>
+    /// Gets the candidate library paths that were probed.
+    /// </summary>
     public IReadOnlyList<string> CandidatePaths { get; }
 }
 
+/// <summary>
+/// Managed diagnostics snapshot for DoraOperator operations.
+/// </summary>
 public sealed class DoraOperatorDiagnosticInfo
 {
     internal DoraOperatorDiagnosticInfo(
@@ -68,14 +148,49 @@ public sealed class DoraOperatorDiagnosticInfo
         ProcessPath = processPath;
     }
 
+    /// <summary>
+    /// Gets the high-level operation that produced the diagnostics snapshot.
+    /// </summary>
     public string Operation { get; }
+
+    /// <summary>
+    /// Gets an optional detail string associated with the operation.
+    /// </summary>
     public string? Detail { get; }
+
+    /// <summary>
+    /// Gets the current operator ID, when available.
+    /// </summary>
     public string? OperatorId { get; }
+
+    /// <summary>
+    /// Gets the current node ID, when available.
+    /// </summary>
     public string? NodeId { get; }
+
+    /// <summary>
+    /// Gets the current dataflow ID, when available.
+    /// </summary>
     public string? DataflowId { get; }
+
+    /// <summary>
+    /// Gets native library discovery and loading diagnostics.
+    /// </summary>
     public DoraNativeLibraryDiagnostics NativeLibrary { get; }
+
+    /// <summary>
+    /// Gets the current working directory of the process.
+    /// </summary>
     public string CurrentDirectory { get; }
+
+    /// <summary>
+    /// Gets the application base directory.
+    /// </summary>
     public string BaseDirectory { get; }
+
+    /// <summary>
+    /// Gets the current process executable path, when available.
+    /// </summary>
     public string? ProcessPath { get; }
 
     internal static DoraOperatorDiagnosticInfo Capture(
@@ -97,6 +212,9 @@ public sealed class DoraOperatorDiagnosticInfo
             Environment.ProcessPath);
     }
 
+    /// <summary>
+    /// Formats the diagnostics snapshot as a human-readable multi-line string.
+    /// </summary>
     public string ToDisplayString()
     {
         var builder = new StringBuilder();
@@ -151,13 +269,22 @@ public sealed class DoraOperatorDiagnosticInfo
     }
 }
 
+/// <summary>
+/// Exception thrown when Dora operator operations fail.
+/// </summary>
 public class DoraOperatorException : Exception
 {
+    /// <summary>
+    /// Initializes a new <see cref="DoraOperatorException"/> with a message.
+    /// </summary>
     public DoraOperatorException(string message)
         : base(message)
     {
     }
 
+    /// <summary>
+    /// Initializes a new <see cref="DoraOperatorException"/> with a message and inner exception.
+    /// </summary>
     public DoraOperatorException(string message, Exception innerException)
         : base(message, innerException)
     {
@@ -176,8 +303,19 @@ public class DoraOperatorException : Exception
         Diagnostics = diagnostics;
     }
 
+    /// <summary>
+    /// Gets the stable DoraOperator error code associated with this exception.
+    /// </summary>
     public DoraOperatorErrorCode ErrorCode { get; } = DoraOperatorErrorCode.Unknown;
+
+    /// <summary>
+    /// Gets the high-level operation that failed, when available.
+    /// </summary>
     public string? Operation { get; }
+
+    /// <summary>
+    /// Gets the structured diagnostics snapshot captured at failure time, when available.
+    /// </summary>
     public DoraOperatorDiagnosticInfo? Diagnostics { get; }
 
     internal static DoraOperatorException Create(
@@ -201,6 +339,9 @@ public class DoraOperatorException : Exception
         return errorCode == DoraOperatorErrorCode.Unknown ? message : $"[{errorCode}] {message}";
     }
 
+    /// <summary>
+    /// Formats the exception, including structured diagnostics when they are available.
+    /// </summary>
     public override string ToString()
     {
         if (Diagnostics is null)

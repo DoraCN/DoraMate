@@ -48,7 +48,7 @@ Dora C# 绑定层已经过多轮开发与迭代，核心功能覆盖了常规节
 | **Arrow 集成层** | ~85% | Arrow C ABI 托管包装（Array/Schema/Payload）、IPC 序列化、Schema 校验、类型化映射（Contract/Projector）、断言辅助 |
 | **P/Invoke 绑定** | 100% | 自定义 `DllImportResolver` 多目录搜索，Node 端 25 个、Operator 端 15+ 个原生函数 |
 | **示例项目** | 10 个 | 覆盖最小节点、多节点、Operator、Arrow 往返、异步、契约等场景 |
-| **回归测试** | 15 个用例 | DoraNode 5 个 + DoraOperator 10 个（含 Decimal128/256） |
+| **回归测试** | 19 个用例 | 已迁移到 xUnit：DoraNode 9 个 + DoraOperator 10 个（含 Decimal128/256），统一通过 `dotnet test` 运行 |
 | **基础设施** | ✅ | 解决方案 `.sln`（28 项目）、`bootstrap-dora.ps1` + `build-native.ps1`、NuGet 打包、dotnet new 模板 |
 | **CI 集成** | 部分 | 3 个 workflow 有 C# 构建步骤，但未跑完整冒烟套件 |
 
@@ -61,7 +61,7 @@ Dora C# 绑定层已经过多轮开发与迭代，核心功能覆盖了常规节
 | NuGet 公开发布 | 本地打包就绪 | 发布到 nuget.org |
 | OpenTelemetry 集成 | 读取了 OTel 上下文 | 接入 .NET OTel SDK |
 | 高级 Arrow 类型 | Union / FixedSizeBinary / Duration / Interval 未覆盖 | 完整覆盖 Arrow 类型体系 |
-| 单元测试框架 | 自定义 Expect 类 | xUnit / NUnit |
+| 单元测试框架 | ✅ 已迁移到 xUnit | `DoraNode.RegressionRunner` / `DoraOperator.RegressionRunner` 已切换为标准测试项目，保留现有 19 个回归用例并接入 `dotnet test` |
 | CI 冒烟覆盖 | 只构建了一个示例 | 跑完整冒烟套件 |
 
 ---
@@ -74,14 +74,14 @@ Dora C# 绑定层已经过多轮开发与迭代，核心功能覆盖了常规节
 |----|------|------|--------|
 | **C1** | CI 完整冒烟套件 | 在 CI workflow 中运行所有 10 个示例的构建 + 冒烟测试（当前只构建了 `csharp-dataflow` 一个）；需要先在 CI 中构建 native C 库并确保 artifacts 目录存在 | 1-2 天 |
 | **C2** | NuGet 包发布到 nuget.org | 注册 nuget.org 账号（如尚未注册）、生成 API Key、配置发布 CI 或手动发布步骤；当前 `DoraMate.DoraNode` 和 `DoraMate.DoraOperator` 的 v0.9.0 包已本地就绪 | 0.5 天 |
-| **C3** | 跨平台验证 | 在 macOS 和 Linux CI runner 上验证 C# 绑定能正常编译和运行（当前 P/Invoke 加载逻辑有多平台分支但未实测）；需要添加 Linux/macOS CI workflow 或扩展现有 workflow 的 matrix | 1-2 天 |
+| **C3** | 跨平台验证 | ✅ 已完成基础验证：已补齐 `build-native.ps1`，新增 `dora-csharp-cross-platform.yml` workflow，并将最小 C# bytes smoke 纳入 `windows-2022` / `ubuntu-latest` / `macos-13` matrix；当前范围是 native 构建、SDK/sample 构建、最小 `DoraNode + DoraOperator` bytes 链路验证，Arrow / OTel 等扩展能力仍待后续单独补全 | 1-2 天 |
 | **C4** | .NET SDK 版本确认 | ✅ 已完成（详见 [docs/33](33-DoraMate项目截止到2026年5月29日的完整工作评估.md)）— CI 用 .NET 8、所有 csproj target net8.0、无 .NET 10 特有 API | 0 |
 
 ### 3.2 🟡 中优先级（v1.0 建议包含）
 
 | ID | 事项 | 说明 | 工作量 |
 |----|------|------|--------|
-| **C5** | 单元测试框架迁移 | 将自定义 `Expect` 类替换为 xUnit 或 NUnit，提高测试可读性和社区熟悉度；现有 15 个回归测试用例需同步迁移 | 1 天 |
+| **C5** | 单元测试框架迁移 | ✅ 已完成：已将两套自定义 `Expect` 控制台回归 runner 迁移为 xUnit 测试项目，删除 `Program.cs` 手写入口，统一改为 `dotnet test`；现有 19 个回归测试用例已全部迁移并本地通过 | 1 天 |
 | **C6** | 高级 Arrow 类型覆盖 | 补充 Union / FixedSizeBinary / Duration / Interval 类型的 C# 包装和示例 | 1-2 天 |
 | **C7** | 异步深度支持重构 | 从后台线程泵模式改为真正的原生异步推送（`ValueTask` / `PipeReader` 模式），提升高性能场景表现 | 2-3 天 |
 
@@ -90,7 +90,7 @@ Dora C# 绑定层已经过多轮开发与迭代，核心功能覆盖了常规节
 | ID | 事项 | 说明 |
 |----|------|------|
 | **C8** | OpenTelemetry 集成 | 将当前读取的 OTel 上下文接入 .NET OpenTelemetry SDK（`Activity` / `ActivitySource`），实现端到端追踪 |
-| **C9** | API 文档完善 | 补充 XML Doc 注释缺失部分（当前约 100+ 个 CS1591 warning），生成 API 文档站点 |
+| **C9** | API 文档完善 | ✅ 已完成：已为 DoraNode / DoraOperator 公共 API、Arrow Contract / Projector / Assertions / Diagnostics 等主要类型补齐 XML Doc，`dotnet build dora-api-csharp.sln` 当前为 `0 warning / 0 error`；API 文档站点生成可在后续发布阶段单独接入 |
 | **C10** | 模板在线安装 | 将 dotnet new 模板发布到 NuGet，支持 `dotnet new install DoraMate.Templates` 一键安装 |
 | **C11** | 基准测试 | 对比 C# 绑定与原生 Rust 节点的吞吐量，识别性能瓶颈 |
 
@@ -143,10 +143,10 @@ C7  异步深度重构          ████████████████
 | 检查项 | 状态 | 说明 |
 |--------|------|------|
 | CI 完整冒烟套件通过 | 🔲 | 所有 10 个示例构建 + 冒烟测试 |
-| macOS / Linux CI 通过 | 🔲 | 至少基础构建和运行 |
+| macOS / Linux CI 通过 | ✅ | 已新增跨平台 matrix workflow，覆盖 native 构建、C# 构建和最小 bytes smoke |
 | NuGet 包可正常安装使用 | ✅ | v0.9.0 本地已验证 |
 | NuGet 包发布到 nuget.org | 🔲 | 可供全球用户 `dotnet add package` |
-| API 文档无 CS1591 警告 | 🔲 | 当前 ~100+ 个缺少 XML 注释的警告 |
+| API 文档无 CS1591 警告 | ✅ | 已补齐 XML 注释，`dotnet build dora-api-csharp.sln` 为 `0 warning / 0 error` |
 | 版本号一致性 | ✅ | 全部组件同步到 v0.9.0 |
 | dotnet new 模板可用 | ✅ | 已验证 `dora-node` / `dora-operator` |
 

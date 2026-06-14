@@ -3,13 +3,39 @@ using System.Collections.ObjectModel;
 
 namespace DoraOperator;
 
+/// <summary>
+/// Provides operator initialization data collected from the Dora runtime environment.
+/// </summary>
 public sealed class OperatorInitContext
 {
+    /// <summary>
+    /// Gets a read-only snapshot of process environment variables.
+    /// </summary>
     public IReadOnlyDictionary<string, string> EnvironmentVariables { get; }
+
+    /// <summary>
+    /// Gets the raw runtime configuration YAML, when available.
+    /// </summary>
     public string? RuntimeConfigYaml { get; }
+
+    /// <summary>
+    /// Gets the parsed runtime configuration, when parsing succeeded.
+    /// </summary>
     public OperatorRuntimeConfig? RuntimeConfig { get; }
+
+    /// <summary>
+    /// Gets the current node ID from the parsed runtime configuration, when available.
+    /// </summary>
     public string? NodeId => RuntimeConfig?.Node.NodeId;
+
+    /// <summary>
+    /// Gets the current dataflow ID from the parsed runtime configuration, when available.
+    /// </summary>
     public string? DataflowId => RuntimeConfig?.Node.DataflowId;
+
+    /// <summary>
+    /// Gets the current operator ID from the parsed runtime configuration, when available.
+    /// </summary>
     public string? OperatorId => RuntimeConfig?.Operator?.Id;
 
     private OperatorInitContext(
@@ -22,6 +48,9 @@ public sealed class OperatorInitContext
         RuntimeConfig = runtimeConfig;
     }
 
+    /// <summary>
+    /// Creates an initialization context from the current process environment.
+    /// </summary>
     public static OperatorInitContext CreateFromEnvironment()
     {
         var environmentVariables = ReadEnvironmentVariables();
@@ -36,6 +65,9 @@ public sealed class OperatorInitContext
         return new OperatorInitContext(environmentVariables, runtimeConfigYaml, runtimeConfig);
     }
 
+    /// <summary>
+    /// Attempts to read an environment variable from the captured snapshot.
+    /// </summary>
     public bool TryGetEnvironmentVariable(string name, out string value)
     {
         if (EnvironmentVariables.TryGetValue(name, out var resolved))
@@ -63,10 +95,24 @@ public sealed class OperatorInitContext
     }
 }
 
+/// <summary>
+/// Represents the parsed Dora runtime configuration YAML relevant to an operator.
+/// </summary>
 public sealed class OperatorRuntimeConfig
 {
+    /// <summary>
+    /// Gets the original YAML document.
+    /// </summary>
     public string RawYaml { get; }
+
+    /// <summary>
+    /// Gets the parsed node runtime configuration.
+    /// </summary>
     public OperatorRuntimeNodeConfig Node { get; }
+
+    /// <summary>
+    /// Gets the parsed operator definition, when available.
+    /// </summary>
     public OperatorDefinitionConfig? Operator { get; }
 
     private OperatorRuntimeConfig(
@@ -202,6 +248,9 @@ public sealed class OperatorRuntimeConfig
     }
 }
 
+/// <summary>
+/// Represents the node-level runtime configuration relevant to an operator.
+/// </summary>
 public sealed class OperatorRuntimeNodeConfig
 {
     internal OperatorRuntimeNodeConfig(
@@ -218,13 +267,35 @@ public sealed class OperatorRuntimeNodeConfig
         IsDynamic = isDynamic;
     }
 
+    /// <summary>
+    /// Gets the current dataflow ID, when available.
+    /// </summary>
     public string? DataflowId { get; }
+
+    /// <summary>
+    /// Gets the current node ID, when available.
+    /// </summary>
     public string? NodeId { get; }
+
+    /// <summary>
+    /// Gets the configured node inputs.
+    /// </summary>
     public IReadOnlyDictionary<string, OperatorInputConfig> Inputs { get; }
+
+    /// <summary>
+    /// Gets the configured node outputs.
+    /// </summary>
     public IReadOnlyList<string> Outputs { get; }
+
+    /// <summary>
+    /// Gets whether the node is marked dynamic, when the flag was specified.
+    /// </summary>
     public bool? IsDynamic { get; }
 }
 
+/// <summary>
+/// Represents the operator definition section of the Dora runtime configuration.
+/// </summary>
 public sealed class OperatorDefinitionConfig
 {
     internal OperatorDefinitionConfig(
@@ -249,17 +320,55 @@ public sealed class OperatorDefinitionConfig
         SendStdoutAs = sendStdoutAs;
     }
 
+    /// <summary>
+    /// Gets the operator ID, when available.
+    /// </summary>
     public string? Id { get; }
+
+    /// <summary>
+    /// Gets the operator display name, when available.
+    /// </summary>
     public string? Name { get; }
+
+    /// <summary>
+    /// Gets the operator description, when available.
+    /// </summary>
     public string? Description { get; }
+
+    /// <summary>
+    /// Gets the configured operator inputs.
+    /// </summary>
     public IReadOnlyDictionary<string, OperatorInputConfig> Inputs { get; }
+
+    /// <summary>
+    /// Gets the configured operator outputs.
+    /// </summary>
     public IReadOnlyList<string> Outputs { get; }
+
+    /// <summary>
+    /// Gets the configured source kind, such as shared-library or python.
+    /// </summary>
     public string? SourceKind { get; }
+
+    /// <summary>
+    /// Gets the configured source value associated with <see cref="SourceKind"/>.
+    /// </summary>
     public string? SourceValue { get; }
+
+    /// <summary>
+    /// Gets the configured build command, when present.
+    /// </summary>
     public string? Build { get; }
+
+    /// <summary>
+    /// Gets the configured send-stdout-as value, when present.
+    /// </summary>
     public string? SendStdoutAs { get; }
 }
 
+/// <summary>
+/// Represents the configuration for a single operator input.
+/// </summary>
 public sealed class OperatorInputConfig
 {
     internal OperatorInputConfig(string? source, int? queueSize)
@@ -268,7 +377,14 @@ public sealed class OperatorInputConfig
         QueueSize = queueSize;
     }
 
+    /// <summary>
+    /// Gets the configured upstream source ID, when present.
+    /// </summary>
     public string? Source { get; }
+
+    /// <summary>
+    /// Gets the configured queue size, when present.
+    /// </summary>
     public int? QueueSize { get; }
 }
 

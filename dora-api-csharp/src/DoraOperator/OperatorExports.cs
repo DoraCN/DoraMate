@@ -165,6 +165,30 @@ internal static class OperatorExports
     {
         NativeMethods.EnsureLoaded();
         var errorUtf8 = System.Text.Encoding.UTF8.GetBytes((message ?? string.Empty) + "\0");
-        return NativeMethods.CreateErrorResult(errorUtf8);
+        try
+        {
+            return NativeMethods.CreateErrorResult(errorUtf8);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            var bytes = errorUtf8[..^1];
+            var unmanaged = Marshal.AllocHGlobal(bytes.Length);
+            Marshal.Copy(bytes, 0, unmanaged, bytes.Length);
+
+            var vec = new NativeTypes.NativeVecU8
+            {
+                Ptr = unmanaged,
+                Len = (nuint)bytes.Length,
+                Cap = (nuint)bytes.Length,
+            };
+
+            var vecPtr = Marshal.AllocHGlobal(Marshal.SizeOf<NativeTypes.NativeVecU8>());
+            Marshal.StructureToPtr(vec, vecPtr, fDeleteOld: false);
+
+            return new NativeTypes.NativeDoraResult
+            {
+                Error = vecPtr,
+            };
+        }
     }
 }
