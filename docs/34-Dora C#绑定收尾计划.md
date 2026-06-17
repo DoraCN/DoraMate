@@ -72,8 +72,8 @@ Dora C# 绑定层已经过多轮开发与迭代，核心功能覆盖了常规节
 
 | ID | 事项 | 说明 | 工作量 |
 |----|------|------|--------|
-| **C1** | CI 完整冒烟套件 | 在 CI workflow 中运行所有 10 个示例的构建 + 冒烟测试（当前只构建了 `csharp-dataflow` 一个）；需要先在 CI 中构建 native C 库并确保 artifacts 目录存在 | 1-2 天 |
-| **C2** | NuGet 包发布到 nuget.org | 注册 nuget.org 账号（如尚未注册）、生成 API Key、配置发布 CI 或手动发布步骤；当前 `DoraMate.DoraNode` 和 `DoraMate.DoraOperator` 的 v0.9.0 包已本地就绪 | 0.5 天 |
+| **C1** | CI 完整冒烟套件 | ✅ 已完成：已补齐 `build-csharp-sample-projects.ps1`、`smoke-localagent-run-status-stop.ps1`、`smoke-csharp-bindings.ps1` 与 release gate 脚本，并将 `local-runtime-e2e.yml` / `local-runtime-multi-dataflow-smoke.yml` / `local-runtime-pr-gate.yml` / `local-runtime-standard-release-gate.yml` 接入完整 10 个 C# 示例的构建 + 冒烟流程；本地最新 `complete` 套件结果为 `10/10` 全部通过 | 1-2 天 |
+| **C2** | NuGet 包发布到 nuget.org | ✅ 已完成：`DoraMate.DoraNode` 和 `DoraMate.DoraOperator` 的 `v0.9.0` 已成功发布到 `nuget.org`；仓库同时补充了手动发布脚本 `scripts/publish-nuget.ps1` 与 `dora-csharp-nuget-publish.yml` workflow，后续可通过 `NUGET_API_KEY` 复用发布流程 | 0.5 天 |
 | **C3** | 跨平台验证 | ✅ 已完成基础验证：已补齐 `build-native.ps1`，新增 `dora-csharp-cross-platform.yml` workflow，并将最小 C# bytes smoke 纳入 `windows-2022` / `ubuntu-latest` / `macos-13` matrix；当前范围是 native 构建、SDK/sample 构建、最小 `DoraNode + DoraOperator` bytes 链路验证，Arrow / OTel 等扩展能力仍待后续单独补全 | 1-2 天 |
 | **C4** | .NET SDK 版本确认 | ✅ 已完成（详见 [docs/33](33-DoraMate项目截止到2026年5月29日的完整工作评估.md)）— CI 用 .NET 8、所有 csproj target net8.0、无 .NET 10 特有 API | 0 |
 
@@ -142,10 +142,10 @@ C7  异步深度重构          ████████████████
 
 | 检查项 | 状态 | 说明 |
 |--------|------|------|
-| CI 完整冒烟套件通过 | 🔲 | 所有 10 个示例构建 + 冒烟测试 |
+| CI 完整冒烟套件通过 | ✅ | 已接入完整 10 个示例构建 + 冒烟测试，最新 `complete` 套件本地验证为 `10/10` 全通过 |
 | macOS / Linux CI 通过 | ✅ | 已新增跨平台 matrix workflow，覆盖 native 构建、C# 构建和最小 bytes smoke |
 | NuGet 包可正常安装使用 | ✅ | v0.9.0 本地已验证 |
-| NuGet 包发布到 nuget.org | 🔲 | 可供全球用户 `dotnet add package` |
+| NuGet 包发布到 nuget.org | ✅ | `DoraMate.DoraNode` / `DoraMate.DoraOperator` `v0.9.0` 已成功公开发布，可供全球用户 `dotnet add package` |
 | API 文档无 CS1591 警告 | ✅ | 已补齐 XML 注释，`dotnet build dora-api-csharp.sln` 为 `0 warning / 0 error` |
 | 版本号一致性 | ✅ | 全部组件同步到 v0.9.0 |
 | dotnet new 模板可用 | ✅ | 已验证 `dora-node` / `dora-operator` |

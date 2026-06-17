@@ -1,0 +1,71 @@
+name: dora-csharp-nuget-publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_pack:
+        description: "Reuse existing artifacts/nuget packages instead of rebuilding"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish-nuget:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      CARGO_TERM_COLOR: always
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Validate NuGet API key presence
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:NUGET_API_KEY)) {
+            throw "GitHub secret NUGET_API_KEY is required for NuGet publish."
+          }
+
+      - name: Vendor Dora source
+        if: ${{ !inputs.skip_pack }}
+        working-directory: ./dora-api-csharp
+        run: ./scripts/bootstrap-dora.ps1
+
+      - name: Build native C libraries
+        if: ${{ !inputs.skip_pack }}
+        working-directory: ./dora-api-csharp
+        run: ./scripts/build-native.ps1 -Configuration Release
+
+      - name: Package Dora C# SDKs
+        if: ${{ !inputs.skip_pack }}
+        working-directory: ./dora-api-csharp
+        run: ./scripts/package-nuget.ps1 -Configuration Release
+
+      - name: Upload NuGet artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dora-csharp-nuget-packages
+          path: dora-api-csharp/artifacts/nuget/*.nupkg
+          if-no-files-found: error
+
+      - name: Publish packages to nuget.org
+        working-directory: ./dora-api-csharp
+        run: ./scripts/publish-nuget.ps1 -Configuration Release -SkipPack

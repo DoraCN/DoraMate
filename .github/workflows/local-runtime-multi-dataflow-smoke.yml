@@ -6,7 +6,7 @@ on:
       profile:
         description: "Sample profile to run"
         required: false
-        default: "baseline"
+        default: "complete"
       rounds:
         description: "Smoke rounds per dataflow sample"
         required: false

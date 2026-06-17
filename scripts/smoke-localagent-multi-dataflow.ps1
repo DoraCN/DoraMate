@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("baseline", "standard")][string]$Profile = "baseline",
+    [ValidateSet("baseline", "standard", "complete")][string]$Profile = "baseline",
     [string[]]$DataflowPaths = @(),
     [int]$Rounds = 3,
     [int]$RunTimeoutSeconds = 30,
@@ -61,53 +61,118 @@ function Get-DefaultSampleCatalog {
         [pscustomobject]@{
             Name         = "csharp-dataflow-smoke"
             RelativePath = "dora-api-csharp\samples\csharp-dataflow\smoke.dataflow.yml"
-            Profiles     = @("baseline", "standard")
+            Profiles     = @("baseline", "standard", "complete")
             BuildSteps   = @()
+            AcceptEarlyTerminalState = $true
         }
         [pscustomobject]@{
             Name         = "csharp-multi-node"
             RelativePath = "dora-api-csharp\samples\csharp-multi-node\dataflow.yml"
-            Profiles     = @("baseline", "standard")
+            Profiles     = @("baseline", "standard", "complete")
             BuildSteps   = @(
                 "dotnet build Producer.csproj -c Release -p:NuGetAudit=false",
                 "dotnet build Consumer.csproj -c Release -p:NuGetAudit=false"
             )
+            AcceptEarlyTerminalState = $true
         }
         [pscustomobject]@{
             Name         = "csharp-async-node-dataflow"
             RelativePath = "dora-api-csharp\samples\csharp-async-node-dataflow\dataflow.yml"
-            Profiles     = @("baseline", "standard")
+            Profiles     = @("baseline", "standard", "complete")
             BuildSteps   = @(
                 "dotnet build Producer.csproj -c Release -p:NuGetAudit=false",
                 "dotnet build Consumer.csproj -c Release -p:NuGetAudit=false"
             )
+            AcceptEarlyTerminalState = $true
         }
         [pscustomobject]@{
             Name         = "csharp-arrow-node-dataflow"
             RelativePath = "dora-api-csharp\samples\csharp-arrow-node-dataflow\dataflow.yml"
-            Profiles     = @("standard")
+            Profiles     = @("standard", "complete")
             BuildSteps   = @(
                 "dotnet build Producer.csproj -c Release -p:NuGetAudit=false",
                 "dotnet build Consumer.csproj -c Release -p:NuGetAudit=false"
             )
+            AcceptEarlyTerminalState = $true
         }
         [pscustomobject]@{
             Name         = "csharp-operator-dataflow"
             RelativePath = "dora-api-csharp\samples\csharp-operator-dataflow\dataflow.yml"
-            Profiles     = @("standard")
+            Profiles     = @("standard", "complete")
             BuildSteps   = @(
                 "dotnet build Producer.csproj -c Release -p:NuGetAudit=false",
                 "dotnet publish CSharpCounterOperator.csproj -c Release -p:NuGetAudit=false",
                 "dotnet build Sink.csproj -c Release -p:NuGetAudit=false"
             )
+            AcceptEarlyTerminalState = $true
+        }
+        [pscustomobject]@{
+            Name         = "csharp-advanced-arrow-node-dataflow"
+            RelativePath = "dora-api-csharp\samples\csharp-advanced-arrow-node-dataflow\dataflow.yml"
+            Profiles     = @("complete")
+            BuildSteps   = @(
+                "dotnet build Producer.csproj -c Release -p:NuGetAudit=false",
+                "dotnet build Consumer.csproj -c Release -p:NuGetAudit=false"
+            )
+            AcceptEarlyTerminalState = $true
+        }
+        [pscustomobject]@{
+            Name         = "csharp-complex-arrow-contract-node-dataflow"
+            RelativePath = "dora-api-csharp\samples\csharp-complex-arrow-contract-node-dataflow\dataflow.yml"
+            Profiles     = @("complete")
+            BuildSteps   = @(
+                "dotnet build Producer.csproj -c Release -p:NuGetAudit=false",
+                "dotnet build Consumer.csproj -c Release -p:NuGetAudit=false"
+            )
+            AcceptEarlyTerminalState = $true
+        }
+        [pscustomobject]@{
+            Name         = "csharp-node-operator-arrow-dataflow"
+            RelativePath = "dora-api-csharp\samples\csharp-node-operator-arrow-dataflow\dataflow.yml"
+            Profiles     = @("complete")
+            BuildSteps   = @(
+                "dotnet build Producer.csproj -c Release -p:NuGetAudit=false",
+                "dotnet publish RecordBatchForwardOperator.csproj -c Release -p:NuGetAudit=false",
+                "dotnet build Consumer.csproj -c Release -p:NuGetAudit=false"
+            )
+            AcceptEarlyTerminalState = $true
+        }
+        [pscustomobject]@{
+            Name         = "csharp-operator-arrow-roundtrip"
+            RelativePath = "dora-api-csharp\samples\csharp-operator-arrow-roundtrip\dataflow.yml"
+            Profiles     = @("complete")
+            BuildSteps   = @(
+                "dotnet build Producer.csproj -c Release -p:NuGetAudit=false",
+                "dotnet publish RecordBatchProducerOperator.csproj -c Release -p:NuGetAudit=false",
+                "dotnet publish RecordBatchVerifierOperator.csproj -c Release -p:NuGetAudit=false",
+                "dotnet build Sink.csproj -c Release -p:NuGetAudit=false"
+            )
+            AcceptEarlyTerminalState = $true
+        }
+        [pscustomobject]@{
+            Name         = "csharp-operator-contract-arrow-dataflow"
+            RelativePath = "dora-api-csharp\samples\csharp-operator-contract-arrow-dataflow\dataflow.yml"
+            Profiles     = @("complete")
+            BuildSteps   = @(
+                "dotnet build Producer.csproj -c Release -p:NuGetAudit=false",
+                "dotnet publish ContractBatchProducerOperator.csproj -c Release -p:NuGetAudit=false",
+                "dotnet publish ContractBatchVerifierOperator.csproj -c Release -p:NuGetAudit=false",
+                "dotnet build Sink.csproj -c Release -p:NuGetAudit=false"
+            )
+            AcceptEarlyTerminalState = $true
         }
     ) | ForEach-Object {
+        $acceptEarlyTerminalState = $false
+        if ($_.PSObject.Properties.Name -contains "AcceptEarlyTerminalState") {
+            $acceptEarlyTerminalState = [bool]$_.AcceptEarlyTerminalState
+        }
         [pscustomobject]@{
             Name         = $_.Name
             RelativePath = $_.RelativePath
             Profiles     = @($_.Profiles)
             DataflowPath = (Join-Path $RepoRoot $_.RelativePath)
             BuildSteps   = @($_.BuildSteps)
+            AcceptEarlyTerminalState = $acceptEarlyTerminalState
         }
     }
 }
@@ -281,6 +346,9 @@ try {
             "-DataflowPath", $resolvedPath,
             "-OutputDir", $sampleOutputDir
         )
+        if ($sample.AcceptEarlyTerminalState) {
+            $smokeArgs += "-AcceptEarlyTerminalState"
+        }
         if ($KeepWorkingDirOut) {
             $smokeArgs += "-KeepWorkingDirOut"
         }

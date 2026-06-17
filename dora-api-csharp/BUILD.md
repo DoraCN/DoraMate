@@ -305,6 +305,28 @@ dotnet build
 
 仓库已内置 `nuget.config`，自动包含 `artifacts/packages` 作为本地源。
 
+### 发布到 nuget.org
+
+如果需要将 SDK 正式发布到 `nuget.org`：
+
+```powershell
+$env:NUGET_API_KEY = "<your-nuget-api-key>"
+pwsh ./scripts/publish-nuget.ps1 -Configuration Release
+```
+
+说明：
+
+- `publish-nuget.ps1` 会从仓库根目录 `VERSION` 读取版本号
+- 默认会先执行 `scripts/package-nuget.ps1`，确保 `artifacts/nuget/` 中的包是最新版本
+- 推送时使用 `dotnet nuget push --skip-duplicate`，重复发布同一版本时会安全跳过
+- 如果你已经确认 `artifacts/nuget/` 中的包可直接发布，可加 `-SkipPack`
+
+GitHub Actions 也提供了手动入口：
+
+- workflow: `dora-csharp-nuget-publish`
+- secret: `NUGET_API_KEY`
+- 可选输入：`skip_pack=true` 以复用现有 `artifacts/nuget/*.nupkg`
+
 ### 卸载
 
 ```powershell
