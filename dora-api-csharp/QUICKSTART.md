@@ -60,6 +60,25 @@ pwsh ./scripts/smoke-csharp-bindings.ps1
 
 都已经处于可运行状态。
 
+## 最短模板路径
+
+如果你的目标是快速新建一个可编译的 Dora C# 项目，优先使用 `dotnet new` 模板。
+
+在线安装：
+
+```powershell
+dotnet new install DoraMate.Templates
+dotnet new dora-node -n MyDoraNode
+dotnet new dora-operator -n MyDoraOperator
+```
+
+如果想先验证当前仓库中的模板包：
+
+```powershell
+pwsh ./scripts/build-templates.ps1 -Force
+dotnet new dora-node -n MyDoraNode
+```
+
 ## 推荐第一个运行示例
 
 ### A. 最小 Node 示例

@@ -156,6 +156,9 @@ public sealed class DoraEvent : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Finalizes the event and releases its native handle if it was not disposed explicitly.
+    /// </summary>
     ~DoraEvent()
     {
         Dispose();

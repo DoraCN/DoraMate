@@ -260,13 +260,14 @@ dotnet build ./dora-api-csharp.sln -c Release
 ### 构建与安装
 
 ```powershell
-pwsh ./scripts/build-templates.ps1
+pwsh ./scripts/build-templates.ps1 -Force
 ```
 
 该脚本会：
 
-1. `dotnet pack` 生成 `artifacts/templates/DoraMate.Templates.*.nupkg`
-2. `dotnet new install` 将模板注册到当前 .NET SDK
+1. 从仓库根 `VERSION` 读取模板包版本
+2. `dotnet pack` 生成 `artifacts/templates/DoraMate.Templates.*.nupkg`
+3. `dotnet new install` 将模板注册到当前 .NET SDK
 
 ### 使用
 
@@ -289,25 +290,22 @@ dotnet publish -c Release
 模板依赖 `DoraNode` / `DoraOperator` NuGet 包。在正式发布到 nuget.org 之前，可在本地打包并测试：
 
 ```powershell
-# 1. 构建核心库并打包为 NuGet
-dotnet pack src/DoraNode/DoraNode.csproj -c Release -o artifacts/packages
-dotnet pack src/DoraOperator/DoraOperator.csproj -c Release -o artifacts/packages
+# 1. 构建核心库和模板包
+pwsh ./scripts/package-nuget.ps1 -Configuration Release
 
-# 2. 构建并安装模板（会自动从 artifacts/packages 找到本地包）
-pwsh ./scripts/build-templates.ps1
+# 2. 构建并安装模板
+pwsh ./scripts/build-templates.ps1 -Force
 
 # 3. 创建测试项目
 dotnet new dora-node -n TestNode
 cd TestNode
-dotnet restore    # 从本地源 + nuget.org 解析依赖
+dotnet restore
 dotnet build
 ```
 
-仓库已内置 `nuget.config`，自动包含 `artifacts/packages` 作为本地源。
-
 ### 发布到 nuget.org
 
-如果需要将 SDK 正式发布到 `nuget.org`：
+如果需要将 SDK 和模板包正式发布到 `nuget.org`：
 
 ```powershell
 $env:NUGET_API_KEY = "<your-nuget-api-key>"
@@ -317,7 +315,8 @@ pwsh ./scripts/publish-nuget.ps1 -Configuration Release
 说明：
 
 - `publish-nuget.ps1` 会从仓库根目录 `VERSION` 读取版本号
-- 默认会先执行 `scripts/package-nuget.ps1`，确保 `artifacts/nuget/` 中的包是最新版本
+- 默认会先执行 `scripts/package-nuget.ps1`，确保 `artifacts/nuget/` 中的 SDK 包和模板包都是最新版本
+- 发布内容包含 `DoraMate.DoraNode`、`DoraMate.DoraOperator` 和 `DoraMate.Templates`
 - 推送时使用 `dotnet nuget push --skip-duplicate`，重复发布同一版本时会安全跳过
 - 如果你已经确认 `artifacts/nuget/` 中的包可直接发布，可加 `-SkipPack`
 
@@ -326,6 +325,16 @@ GitHub Actions 也提供了手动入口：
 - workflow: `dora-csharp-nuget-publish`
 - secret: `NUGET_API_KEY`
 - 可选输入：`skip_pack=true` 以复用现有 `artifacts/nuget/*.nupkg`
+
+### 在线安装（nuget.org）
+
+模板包发布后，开发者可以直接从 NuGet 安装：
+
+```powershell
+dotnet new install DoraMate.Templates
+dotnet new dora-node -n MyCustomNode
+dotnet new dora-operator -n MyCustomOp
+```
 
 ### 卸载
 

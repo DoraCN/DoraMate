@@ -64,6 +64,24 @@ pwsh ./scripts/smoke-csharp-bindings.ps1
 
 如果本机没有可用的 `dora` CLI，可在部分 smoke 中使用 `-BuildCli` 或显式传入 `-DoraPath`。
 
+## 在线安装模板
+
+模板包 `DoraMate.Templates` 发布到 NuGet 后，可直接安装到本机的 `dotnet new`：
+
+```powershell
+dotnet new install DoraMate.Templates
+dotnet new dora-node -n MyDoraNode
+dotnet new dora-operator -n MyDoraOperator
+```
+
+如果只是本地验证当前仓库中的模板包，可执行：
+
+```powershell
+pwsh ./scripts/build-templates.ps1 -Force
+```
+
+该脚本会基于仓库根 `VERSION` 打包 `templates/DoraMate.Templates.csproj`，然后安装生成的本地 `.nupkg` 到当前 .NET SDK。
+
 ## 使用
 
 ### 编写 Node

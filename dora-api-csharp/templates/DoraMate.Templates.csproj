@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <PackageId>DoraMate.Templates</PackageId>
-    <Version>0.2.0</Version>
+    <Version>0.10.0</Version>
     <Title>DoraMate C# Templates</Title>
     <Authors>DoraMate Contributors</Authors>
     <Description>dotnet new templates for creating Dora nodes and operators in C#.</Description>
@@ -16,6 +16,7 @@
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <ContentTargetFolders>content</ContentTargetFolders>
     <NoDefaultExcludes>true</NoDefaultExcludes>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
 
     <!-- Dummy build: templates are content-only -->
     <TargetFramework>net8.0</TargetFramework>

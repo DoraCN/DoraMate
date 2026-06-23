@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.0] - 2026-06-23
+
+### Added
+- **Advanced Arrow coverage for C# bindings**: DoraNode and DoraOperator now cover Union, FixedSizeBinary, Duration, and Interval types across schema validation, assertions/projectors, contract samples, and regression tests.
+
+### Changed
+- **C# NuGet version bump**: `DoraMate.DoraNode` and `DoraMate.DoraOperator` are prepared for a new NuGet release at v0.10.0.
+
 ## [0.9.0] - 2026-05-29
 
 ### Added

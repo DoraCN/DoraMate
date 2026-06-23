@@ -77,6 +77,9 @@ public sealed class ArrowArray : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Finalizes the array wrapper and releases the native Arrow handle if needed.
+    /// </summary>
     ~ArrowArray()
     {
         ReleaseHandle();
@@ -187,6 +190,9 @@ public sealed class ArrowSchema : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Finalizes the schema wrapper and releases the native Arrow handle if needed.
+    /// </summary>
     ~ArrowSchema()
     {
         ReleaseHandle();
@@ -290,11 +296,18 @@ public sealed class ArrowPayload : IDisposable
     }
 }
 
+/// <summary>
+/// Convenience extensions for sending common payload shapes through a <see cref="SendOutput"/> delegate.
+/// </summary>
 public static class SendOutputExtensions
 {
     /// <summary>
     /// Sends a UTF-8 string payload through the low-level send-output delegate.
     /// </summary>
+    /// <param name="sendOutput">The low-level output delegate provided by the runtime.</param>
+    /// <param name="outputId">The output identifier to publish to.</param>
+    /// <param name="data">The string payload to encode as UTF-8.</param>
+    /// <returns>The Dora send result returned by the runtime.</returns>
     public static DoraResult Send(this SendOutput sendOutput, string outputId, string data)
     {
         ArgumentNullException.ThrowIfNull(sendOutput);
@@ -304,6 +317,10 @@ public static class SendOutputExtensions
     /// <summary>
     /// Sends a byte payload from a memory buffer through the low-level send-output delegate.
     /// </summary>
+    /// <param name="sendOutput">The low-level output delegate provided by the runtime.</param>
+    /// <param name="outputId">The output identifier to publish to.</param>
+    /// <param name="data">The byte buffer to send.</param>
+    /// <returns>The Dora send result returned by the runtime.</returns>
     public static DoraResult Send(this SendOutput sendOutput, string outputId, ReadOnlyMemory<byte> data)
     {
         ArgumentNullException.ThrowIfNull(sendOutput);
@@ -313,6 +330,10 @@ public static class SendOutputExtensions
     /// <summary>
     /// Serializes and sends a record batch through the low-level send-output delegate.
     /// </summary>
+    /// <param name="sendOutput">The low-level output delegate provided by the runtime.</param>
+    /// <param name="outputId">The output identifier to publish to.</param>
+    /// <param name="recordBatch">The record batch to serialize and send.</param>
+    /// <returns>The Dora send result returned by the runtime.</returns>
     public static DoraResult Send(this SendOutput sendOutput, string outputId, Apache.Arrow.RecordBatch recordBatch)
     {
         ArgumentNullException.ThrowIfNull(sendOutput);
@@ -323,6 +344,10 @@ public static class SendOutputExtensions
     /// <summary>
     /// Sends an Arrow payload through the low-level send-output delegate.
     /// </summary>
+    /// <param name="sendOutput">The low-level output delegate provided by the runtime.</param>
+    /// <param name="outputId">The output identifier to publish to.</param>
+    /// <param name="payload">The Arrow payload whose ownership transfers on success.</param>
+    /// <returns>The Dora send result returned by the runtime.</returns>
     public static DoraResult Send(this SendOutput sendOutput, string outputId, ArrowPayload payload)
     {
         ArgumentNullException.ThrowIfNull(sendOutput);
@@ -333,6 +358,11 @@ public static class SendOutputExtensions
     /// <summary>
     /// Sends an Arrow array/schema pair through the low-level send-output delegate.
     /// </summary>
+    /// <param name="sendOutput">The low-level output delegate provided by the runtime.</param>
+    /// <param name="outputId">The output identifier to publish to.</param>
+    /// <param name="array">The Arrow array handle to send.</param>
+    /// <param name="schema">The Arrow schema handle to send.</param>
+    /// <returns>The Dora send result returned by the runtime.</returns>
     public static DoraResult Send(this SendOutput sendOutput, string outputId, ArrowArray array, ArrowSchema schema)
     {
         ArgumentNullException.ThrowIfNull(sendOutput);
@@ -344,6 +374,10 @@ public static class SendOutputExtensions
     /// <summary>
     /// Sends a unified payload wrapper through the low-level send-output delegate.
     /// </summary>
+    /// <param name="sendOutput">The low-level output delegate provided by the runtime.</param>
+    /// <param name="outputId">The output identifier to publish to.</param>
+    /// <param name="payload">The discriminated payload wrapper to send.</param>
+    /// <returns>The Dora send result returned by the runtime.</returns>
     public static DoraResult Send(this SendOutput sendOutput, string outputId, DoraOutputPayload payload)
     {
         ArgumentNullException.ThrowIfNull(sendOutput);
@@ -363,6 +397,10 @@ public static class SendOutputExtensions
     /// <summary>
     /// Sends an Arrow payload through the low-level send-output delegate.
     /// </summary>
+    /// <param name="sendOutput">The low-level output delegate provided by the runtime.</param>
+    /// <param name="outputId">The output identifier to publish to.</param>
+    /// <param name="payload">The Arrow payload whose ownership transfers on success.</param>
+    /// <returns>The Dora send result returned by the runtime.</returns>
     public static DoraResult SendArrow(this SendOutput sendOutput, string outputId, ArrowPayload payload)
     {
         ArgumentNullException.ThrowIfNull(sendOutput);
@@ -373,6 +411,11 @@ public static class SendOutputExtensions
     /// <summary>
     /// Sends an Arrow array/schema pair through the low-level send-output delegate.
     /// </summary>
+    /// <param name="sendOutput">The low-level output delegate provided by the runtime.</param>
+    /// <param name="outputId">The output identifier to publish to.</param>
+    /// <param name="array">The Arrow array handle to send.</param>
+    /// <param name="schema">The Arrow schema handle to send.</param>
+    /// <returns>The Dora send result returned by the runtime.</returns>
     public static DoraResult SendArrow(this SendOutput sendOutput, string outputId, ArrowArray array, ArrowSchema schema)
     {
         ArgumentNullException.ThrowIfNull(sendOutput);

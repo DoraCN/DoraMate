@@ -42,7 +42,7 @@ try {
             $packArgs += "-SkipBuild"
         }
 
-        Write-Host "[publish-nuget] Packaging SDKs..."
+        Write-Host "[publish-nuget] Packaging SDKs and templates..."
         & pwsh @packArgs
         if ($LASTEXITCODE -ne 0) {
             throw "NuGet packaging failed with exit code $LASTEXITCODE"
@@ -51,7 +51,8 @@ try {
 
     $packages = @(
         "DoraMate.DoraNode.$version.nupkg",
-        "DoraMate.DoraOperator.$version.nupkg"
+        "DoraMate.DoraOperator.$version.nupkg",
+        "DoraMate.Templates.$version.nupkg"
     ) | ForEach-Object { Join-Path $outDir $_ }
 
     foreach ($package in $packages) {

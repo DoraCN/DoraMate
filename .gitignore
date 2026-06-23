@@ -18,3 +18,6 @@ doramate_*.yaml
 # C# 编译中间产物
 *.obj/
 **/obj/
+
+# 本地 .NET CLI 缓存
+dora-api-csharp/.dotnet-cli/

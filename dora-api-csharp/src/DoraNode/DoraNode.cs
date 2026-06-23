@@ -60,6 +60,9 @@ public sealed class DoraNode : IDisposable
         return DoraNodeDiagnosticInfo.Capture(operation, detail);
     }
 
+    /// <summary>
+    /// Initializes a Dora node context from the current runtime environment.
+    /// </summary>
     public DoraNode()
     {
         try
@@ -324,6 +327,9 @@ public sealed class DoraNode : IDisposable
         }
     }
 
+    /// <summary>
+    /// Releases the native Dora context and stops any active asynchronous event pump.
+    /// </summary>
     public void Dispose()
     {
         AsyncEventStreamState? asyncEventStream = null;
@@ -362,6 +368,9 @@ public sealed class DoraNode : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Finalizes the node and releases its native Dora context if it was not disposed explicitly.
+    /// </summary>
     ~DoraNode()
     {
         Dispose();

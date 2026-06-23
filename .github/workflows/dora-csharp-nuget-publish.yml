@@ -54,7 +54,7 @@ jobs:
         working-directory: ./dora-api-csharp
         run: ./scripts/build-native.ps1 -Configuration Release
 
-      - name: Package Dora C# SDKs
+      - name: Package Dora C# SDKs and templates
         if: ${{ !inputs.skip_pack }}
         working-directory: ./dora-api-csharp
         run: ./scripts/package-nuget.ps1 -Configuration Release

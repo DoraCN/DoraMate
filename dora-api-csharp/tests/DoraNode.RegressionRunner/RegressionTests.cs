@@ -1,3 +1,5 @@
+using System.Text;
+using Apache.Arrow;
 using CSharpAdvancedArrowNodeDataflow;
 using CSharpArrowNodeDataflow;
 using CSharpComplexArrowNodeDataflow;
@@ -80,13 +82,13 @@ public sealed class RegressionTests
         using var batch = RichAdvancedArrowContract.CreateRecordBatch();
         var summary = ArrowRecordBatchSummary.Create(batch).ToSummaryString("NODE_ARROW_ADVANCED_OK");
         TestAssert.Equal(
-            "NODE_ARROW_ADVANCED_OK fields=id,created,event_time,payload cols=4 rows=2 types=Int32,Date32,Timestamp,Binary",
+            "NODE_ARROW_ADVANCED_OK fields=id,created,event_time,payload,fixed_payload,processing_time,billing_cycle,retry_window,maintenance_window,result cols=10 rows=2 types=Int32,Date32,Timestamp,Binary,FixedSizedBinary,Duration,Interval,Interval,Interval,Union",
             summary,
             "advanced summary");
     }
 
     [Fact]
-    public void AdvancedAssertionsCoverDateTimestampBinaryColumns()
+    public void AdvancedAssertionsCoverExtendedArrowTypes()
     {
         using var batch = RichAdvancedArrowContract.CreateRecordBatch();
 
@@ -115,6 +117,64 @@ public sealed class RegressionTests
         TestAssert.True(
             ArrowRecordBatchAssertions.TryGetBinaryColumn(batch, RichAdvancedArrowContract.ExpectedFieldNames[3], RichAdvancedArrowContract.ExpectedPayloads, out _, out error),
             error);
+        TestAssert.True(
+            ArrowRecordBatchAssertions.TryGetFixedSizeBinaryColumn(
+                batch,
+                RichAdvancedArrowContract.ExpectedFieldNames[4],
+                RichAdvancedArrowContract.ExpectedFixedPayloadByteWidth,
+                RichAdvancedArrowContract.ExpectedFixedPayloads,
+                out _,
+                out error),
+            error);
+        TestAssert.True(
+            ArrowRecordBatchAssertions.TryGetDurationColumn(
+                batch,
+                RichAdvancedArrowContract.ExpectedFieldNames[5],
+                RichAdvancedArrowContract.ExpectedDurationUnit,
+                RichAdvancedArrowContract.ExpectedProcessingTimes,
+                out _,
+                out error),
+            error);
+        TestAssert.True(
+            ArrowRecordBatchAssertions.TryGetYearMonthIntervalColumn(
+                batch,
+                RichAdvancedArrowContract.ExpectedFieldNames[6],
+                RichAdvancedArrowContract.ExpectedBillingCycles,
+                out _,
+                out error),
+            error);
+        TestAssert.True(
+            ArrowRecordBatchAssertions.TryGetDayTimeIntervalColumn(
+                batch,
+                RichAdvancedArrowContract.ExpectedFieldNames[7],
+                RichAdvancedArrowContract.ExpectedRetryWindows,
+                out _,
+                out error),
+            error);
+        TestAssert.True(
+            ArrowRecordBatchAssertions.TryGetMonthDayNanosecondIntervalColumn(
+                batch,
+                RichAdvancedArrowContract.ExpectedFieldNames[8],
+                RichAdvancedArrowContract.ExpectedMaintenanceWindows,
+                out _,
+                out error),
+            error);
+        TestAssert.True(
+            ArrowRecordBatchAssertions.TryGetDenseUnionColumn(
+                batch,
+                RichAdvancedArrowContract.ExpectedFieldNames[9],
+                RichAdvancedArrowContract.ExpectedUnionChildFieldNames,
+                RichAdvancedArrowContract.ExpectedUnionChildTypeIds,
+                RichAdvancedArrowContract.ExpectedUnionTypeIds,
+                out var unionColumn,
+                out error),
+            error);
+
+        TestAssert.NotNull(unionColumn, "union column");
+        TestAssert.Equal(RichAdvancedArrowContract.ExpectedRowCount, unionColumn!.Length, "union length");
+        TestAssert.SequenceEqual(RichAdvancedArrowContract.ExpectedUnionRowTypeIds, unionColumn.TypeIds.ToArray(), "union type ids");
+        TestAssert.Equal("ok", ((StringArray)unionColumn.Fields[0]).GetString(0, Encoding.UTF8)!, "union status");
+        TestAssert.Equal(42, ((Int32Array)unionColumn.Fields[1]).GetValue(0)!.Value, "union code");
     }
 
     [Fact]

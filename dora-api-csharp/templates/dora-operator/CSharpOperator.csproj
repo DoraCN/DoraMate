@@ -21,7 +21,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DoraMate.DoraOperator" Version="0.2.0" />
+    <PackageReference Include="DoraMate.DoraOperator" Version="0.10.0" />
   </ItemGroup>
 
   <ItemGroup>

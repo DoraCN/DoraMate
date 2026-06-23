@@ -77,6 +77,9 @@ public sealed class ArrowArray : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Finalizes the array wrapper and releases the native Arrow handle if needed.
+    /// </summary>
     ~ArrowArray()
     {
         ReleaseHandle();
@@ -187,6 +190,9 @@ public sealed class ArrowSchema : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Finalizes the schema wrapper and releases the native Arrow handle if needed.
+    /// </summary>
     ~ArrowSchema()
     {
         ReleaseHandle();

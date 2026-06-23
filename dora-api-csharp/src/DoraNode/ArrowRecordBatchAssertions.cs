@@ -1,5 +1,7 @@
 using System.Text;
 using Apache.Arrow;
+using Apache.Arrow.Arrays;
+using Apache.Arrow.Scalars;
 using Apache.Arrow.Types;
 
 namespace DoraNode;
@@ -304,6 +306,58 @@ public static class ArrowRecordBatchAssertions
     }
 
     /// <summary>
+    /// Tries to read a FixedSizeBinary column by field name and validate its byte width.
+    /// </summary>
+    public static bool TryGetFixedSizeBinaryColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        int expectedByteWidth,
+        out FixedSizeBinaryArray? column,
+        out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(recordBatch);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+
+        column = null;
+        if (!ArrowSchemaValidation.TryValidateFixedSizeBinaryField(
+                recordBatch.Schema,
+                fieldName,
+                expectedByteWidth,
+                out var index,
+                out error))
+        {
+            return false;
+        }
+
+        return TryGetColumn(recordBatch, index, fieldName, ArrowTypeId.FixedSizedBinary, out column, out error);
+    }
+
+    /// <summary>
+    /// Tries to read a FixedSizeBinary column by field name, validate its byte width, and validate its values.
+    /// </summary>
+    public static bool TryGetFixedSizeBinaryColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        int expectedByteWidth,
+        IReadOnlyList<byte[]> expectedValues,
+        out FixedSizeBinaryArray? column,
+        out string? error)
+    {
+        if (!TryGetFixedSizeBinaryColumn(recordBatch, fieldName, expectedByteWidth, out column, out error))
+        {
+            return false;
+        }
+
+        if (column is null)
+        {
+            error = $"Expected FixedSizeBinary column '{fieldName}' but the resolved Arrow array was null.";
+            return false;
+        }
+
+        return TryAssertFixedSizeBinaryValues(column, fieldName, expectedValues, out error);
+    }
+
+    /// <summary>
     /// Tries to read a Date32 column by field name and validate its date unit.
     /// </summary>
     public static bool TryGetDate32Column(
@@ -348,6 +402,53 @@ public static class ArrowRecordBatchAssertions
         }
 
         return TryAssertDate32Values(column, fieldName, expectedValues, out error);
+    }
+
+    /// <summary>
+    /// Tries to read a Duration column by field name and validate its time unit.
+    /// </summary>
+    public static bool TryGetDurationColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        TimeUnit expectedUnit,
+        out DurationArray? column,
+        out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(recordBatch);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+
+        column = null;
+        if (!ArrowSchemaValidation.TryValidateDurationField(recordBatch.Schema, fieldName, expectedUnit, out var index, out error))
+        {
+            return false;
+        }
+
+        return TryGetColumn(recordBatch, index, fieldName, ArrowTypeId.Duration, out column, out error);
+    }
+
+    /// <summary>
+    /// Tries to read a Duration column by field name, validate its unit, and validate its values.
+    /// </summary>
+    public static bool TryGetDurationColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        TimeUnit expectedUnit,
+        IReadOnlyList<TimeSpan> expectedValues,
+        out DurationArray? column,
+        out string? error)
+    {
+        if (!TryGetDurationColumn(recordBatch, fieldName, expectedUnit, out column, out error))
+        {
+            return false;
+        }
+
+        if (column is null)
+        {
+            error = $"Expected Duration column '{fieldName}' but the resolved Arrow array was null.";
+            return false;
+        }
+
+        return TryAssertDurationValues(column, fieldName, expectedValues, out error);
     }
 
     /// <summary>
@@ -403,6 +504,210 @@ public static class ArrowRecordBatchAssertions
         }
 
         return TryAssertTimestampValues(column, fieldName, expectedValues, out error);
+    }
+
+    /// <summary>
+    /// Tries to read a YearMonth interval column by field name.
+    /// </summary>
+    public static bool TryGetYearMonthIntervalColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        out YearMonthIntervalArray? column,
+        out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(recordBatch);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+
+        column = null;
+        if (!ArrowSchemaValidation.TryValidateIntervalField(recordBatch.Schema, fieldName, IntervalUnit.YearMonth, out var index, out error))
+        {
+            return false;
+        }
+
+        return TryGetColumn(recordBatch, index, fieldName, ArrowTypeId.Interval, out column, out error);
+    }
+
+    /// <summary>
+    /// Tries to read a YearMonth interval column by field name and validate its values.
+    /// </summary>
+    public static bool TryGetYearMonthIntervalColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        IReadOnlyList<YearMonthInterval> expectedValues,
+        out YearMonthIntervalArray? column,
+        out string? error)
+    {
+        if (!TryGetYearMonthIntervalColumn(recordBatch, fieldName, out column, out error))
+        {
+            return false;
+        }
+
+        if (column is null)
+        {
+            error = $"Expected YearMonth interval column '{fieldName}' but the resolved Arrow array was null.";
+            return false;
+        }
+
+        return TryAssertYearMonthIntervalValues(column, fieldName, expectedValues, out error);
+    }
+
+    /// <summary>
+    /// Tries to read a DayTime interval column by field name.
+    /// </summary>
+    public static bool TryGetDayTimeIntervalColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        out DayTimeIntervalArray? column,
+        out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(recordBatch);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+
+        column = null;
+        if (!ArrowSchemaValidation.TryValidateIntervalField(recordBatch.Schema, fieldName, IntervalUnit.DayTime, out var index, out error))
+        {
+            return false;
+        }
+
+        return TryGetColumn(recordBatch, index, fieldName, ArrowTypeId.Interval, out column, out error);
+    }
+
+    /// <summary>
+    /// Tries to read a DayTime interval column by field name and validate its values.
+    /// </summary>
+    public static bool TryGetDayTimeIntervalColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        IReadOnlyList<DayTimeInterval> expectedValues,
+        out DayTimeIntervalArray? column,
+        out string? error)
+    {
+        if (!TryGetDayTimeIntervalColumn(recordBatch, fieldName, out column, out error))
+        {
+            return false;
+        }
+
+        if (column is null)
+        {
+            error = $"Expected DayTime interval column '{fieldName}' but the resolved Arrow array was null.";
+            return false;
+        }
+
+        return TryAssertDayTimeIntervalValues(column, fieldName, expectedValues, out error);
+    }
+
+    /// <summary>
+    /// Tries to read a MonthDayNanosecond interval column by field name.
+    /// </summary>
+    public static bool TryGetMonthDayNanosecondIntervalColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        out MonthDayNanosecondIntervalArray? column,
+        out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(recordBatch);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+
+        column = null;
+        if (!ArrowSchemaValidation.TryValidateIntervalField(
+                recordBatch.Schema,
+                fieldName,
+                IntervalUnit.MonthDayNanosecond,
+                out var index,
+                out error))
+        {
+            return false;
+        }
+
+        return TryGetColumn(recordBatch, index, fieldName, ArrowTypeId.Interval, out column, out error);
+    }
+
+    /// <summary>
+    /// Tries to read a MonthDayNanosecond interval column by field name and validate its values.
+    /// </summary>
+    public static bool TryGetMonthDayNanosecondIntervalColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        IReadOnlyList<MonthDayNanosecondInterval> expectedValues,
+        out MonthDayNanosecondIntervalArray? column,
+        out string? error)
+    {
+        if (!TryGetMonthDayNanosecondIntervalColumn(recordBatch, fieldName, out column, out error))
+        {
+            return false;
+        }
+
+        if (column is null)
+        {
+            error = $"Expected MonthDayNanosecond interval column '{fieldName}' but the resolved Arrow array was null.";
+            return false;
+        }
+
+        return TryAssertMonthDayNanosecondIntervalValues(column, fieldName, expectedValues, out error);
+    }
+
+    /// <summary>
+    /// Tries to read a Dense union column by field name and validate its child-field contract.
+    /// </summary>
+    public static bool TryGetDenseUnionColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        IReadOnlyList<string> expectedChildFieldNames,
+        IReadOnlyList<ArrowTypeId> expectedChildTypeIds,
+        IReadOnlyList<int> expectedTypeIds,
+        out DenseUnionArray? column,
+        out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(recordBatch);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+
+        column = null;
+        if (!ArrowSchemaValidation.TryValidateUnionField(
+                recordBatch.Schema,
+                fieldName,
+                UnionMode.Dense,
+                expectedChildFieldNames,
+                expectedChildTypeIds,
+                expectedTypeIds,
+                out var index,
+                out error))
+        {
+            return false;
+        }
+
+        return TryGetColumn(recordBatch, index, fieldName, ArrowTypeId.Union, out column, out error);
+    }
+
+    /// <summary>
+    /// Tries to read a Sparse union column by field name and validate its child-field contract.
+    /// </summary>
+    public static bool TryGetSparseUnionColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        IReadOnlyList<string> expectedChildFieldNames,
+        IReadOnlyList<ArrowTypeId> expectedChildTypeIds,
+        IReadOnlyList<int> expectedTypeIds,
+        out SparseUnionArray? column,
+        out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(recordBatch);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+
+        column = null;
+        if (!ArrowSchemaValidation.TryValidateUnionField(
+                recordBatch.Schema,
+                fieldName,
+                UnionMode.Sparse,
+                expectedChildFieldNames,
+                expectedChildTypeIds,
+                expectedTypeIds,
+                out var index,
+                out error))
+        {
+            return false;
+        }
+
+        return TryGetColumn(recordBatch, index, fieldName, ArrowTypeId.Union, out column, out error);
     }
 
     /// <summary>
@@ -1142,6 +1447,41 @@ public static class ArrowRecordBatchAssertions
     }
 
     /// <summary>
+    /// Validates that a FixedSizeBinary column contains the expected values in order.
+    /// </summary>
+    public static bool TryAssertFixedSizeBinaryValues(
+        FixedSizeBinaryArray column,
+        string fieldName,
+        IReadOnlyList<byte[]> expectedValues,
+        out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(column);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+        ArgumentNullException.ThrowIfNull(expectedValues);
+
+        if (column.Length != expectedValues.Count)
+        {
+            error = $"Expected FixedSizeBinary column '{fieldName}' to contain {expectedValues.Count} values but got {column.Length}.";
+            return false;
+        }
+
+        for (var index = 0; index < expectedValues.Count; index++)
+        {
+            var actual = column.GetBytes(index);
+            var expected = expectedValues[index] ?? System.Array.Empty<byte>();
+            if (!actual.SequenceEqual(expected))
+            {
+                error =
+                    $"Expected FixedSizeBinary column '{fieldName}' value at row {index} to be {BitConverter.ToString(expected)} but got {BitConverter.ToString(actual.ToArray())}.";
+                return false;
+            }
+        }
+
+        error = null;
+        return true;
+    }
+
+    /// <summary>
     /// Validates that a Date32 column contains the expected values in order.
     /// </summary>
     public static bool TryAssertDate32Values(
@@ -1176,6 +1516,40 @@ public static class ArrowRecordBatchAssertions
     }
 
     /// <summary>
+    /// Validates that a Duration column contains the expected values in order.
+    /// </summary>
+    public static bool TryAssertDurationValues(
+        DurationArray column,
+        string fieldName,
+        IReadOnlyList<TimeSpan> expectedValues,
+        out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(column);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+        ArgumentNullException.ThrowIfNull(expectedValues);
+
+        if (column.Length != expectedValues.Count)
+        {
+            error = $"Expected Duration column '{fieldName}' to contain {expectedValues.Count} values but got {column.Length}.";
+            return false;
+        }
+
+        for (var index = 0; index < expectedValues.Count; index++)
+        {
+            var actual = column.GetTimeSpan(index);
+            var expected = expectedValues[index];
+            if (actual != expected)
+            {
+                error = $"Expected Duration column '{fieldName}' value at row {index} to be {expected} but got {actual}.";
+                return false;
+            }
+        }
+
+        error = null;
+        return true;
+    }
+
+    /// <summary>
     /// Validates that a Timestamp column contains the expected values in order.
     /// </summary>
     public static bool TryAssertTimestampValues(
@@ -1201,6 +1575,111 @@ public static class ArrowRecordBatchAssertions
             if (actual != expected)
             {
                 error = $"Expected Timestamp column '{fieldName}' value at row {index} to be {expected:O} but got {actual:O}.";
+                return false;
+            }
+        }
+
+        error = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Validates that a YearMonth interval column contains the expected values in order.
+    /// </summary>
+    public static bool TryAssertYearMonthIntervalValues(
+        YearMonthIntervalArray column,
+        string fieldName,
+        IReadOnlyList<YearMonthInterval> expectedValues,
+        out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(column);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+        ArgumentNullException.ThrowIfNull(expectedValues);
+
+        if (column.Length != expectedValues.Count)
+        {
+            error = $"Expected YearMonth interval column '{fieldName}' to contain {expectedValues.Count} values but got {column.Length}.";
+            return false;
+        }
+
+        for (var index = 0; index < expectedValues.Count; index++)
+        {
+            var actual = column.Values[index];
+            var expected = expectedValues[index];
+            if (!actual.Equals(expected))
+            {
+                error =
+                    $"Expected YearMonth interval column '{fieldName}' value at row {index} to be {expected.Months} months but got {actual.Months} months.";
+                return false;
+            }
+        }
+
+        error = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Validates that a DayTime interval column contains the expected values in order.
+    /// </summary>
+    public static bool TryAssertDayTimeIntervalValues(
+        DayTimeIntervalArray column,
+        string fieldName,
+        IReadOnlyList<DayTimeInterval> expectedValues,
+        out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(column);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+        ArgumentNullException.ThrowIfNull(expectedValues);
+
+        if (column.Length != expectedValues.Count)
+        {
+            error = $"Expected DayTime interval column '{fieldName}' to contain {expectedValues.Count} values but got {column.Length}.";
+            return false;
+        }
+
+        for (var index = 0; index < expectedValues.Count; index++)
+        {
+            var actual = column.Values[index];
+            var expected = expectedValues[index];
+            if (!actual.Equals(expected))
+            {
+                error =
+                    $"Expected DayTime interval column '{fieldName}' value at row {index} to be ({expected.Days}, {expected.Milliseconds}) but got ({actual.Days}, {actual.Milliseconds}).";
+                return false;
+            }
+        }
+
+        error = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Validates that a MonthDayNanosecond interval column contains the expected values in order.
+    /// </summary>
+    public static bool TryAssertMonthDayNanosecondIntervalValues(
+        MonthDayNanosecondIntervalArray column,
+        string fieldName,
+        IReadOnlyList<MonthDayNanosecondInterval> expectedValues,
+        out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(column);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+        ArgumentNullException.ThrowIfNull(expectedValues);
+
+        if (column.Length != expectedValues.Count)
+        {
+            error = $"Expected MonthDayNanosecond interval column '{fieldName}' to contain {expectedValues.Count} values but got {column.Length}.";
+            return false;
+        }
+
+        for (var index = 0; index < expectedValues.Count; index++)
+        {
+            var actual = column.Values[index];
+            var expected = expectedValues[index];
+            if (!actual.Equals(expected))
+            {
+                error =
+                    $"Expected MonthDayNanosecond interval column '{fieldName}' value at row {index} to be ({expected.Months}, {expected.Days}, {expected.Nanoseconds}) but got ({actual.Months}, {actual.Days}, {actual.Nanoseconds}).";
                 return false;
             }
         }

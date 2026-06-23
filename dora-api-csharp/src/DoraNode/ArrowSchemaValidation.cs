@@ -144,6 +144,38 @@ public static class ArrowSchemaValidation
     }
 
     /// <summary>
+    /// Validates that a schema field is a fixed-size binary field with the expected byte width.
+    /// </summary>
+    public static bool TryValidateFixedSizeBinaryField(
+        Schema schema,
+        string expectedFieldName,
+        int expectedByteWidth,
+        out int index,
+        out string? error)
+    {
+        if (!TryValidateField(schema, expectedFieldName, ArrowTypeId.FixedSizedBinary, out index, out error))
+        {
+            return false;
+        }
+
+        if (schema.FieldsList[index].DataType is not FixedSizeBinaryType fixedSizeBinaryType)
+        {
+            error = $"Expected field '{expectedFieldName}' to use FixedSizeBinaryType.";
+            return false;
+        }
+
+        if (fixedSizeBinaryType.ByteWidth != expectedByteWidth)
+        {
+            error =
+                $"Expected field '{expectedFieldName}' to use byte width {expectedByteWidth} but got {fixedSizeBinaryType.ByteWidth}.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    /// <summary>
     /// Validates that a schema field is a Date32 field with the expected unit.
     /// </summary>
     public static bool TryValidateDate32Field(
@@ -167,6 +199,37 @@ public static class ArrowSchemaValidation
         if (dateType.Unit != expectedUnit)
         {
             error = $"Expected field '{expectedFieldName}' to use {expectedUnit} date unit but got {dateType.Unit}.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Validates that a schema field is a duration field with the expected unit.
+    /// </summary>
+    public static bool TryValidateDurationField(
+        Schema schema,
+        string expectedFieldName,
+        TimeUnit expectedUnit,
+        out int index,
+        out string? error)
+    {
+        if (!TryValidateField(schema, expectedFieldName, ArrowTypeId.Duration, out index, out error))
+        {
+            return false;
+        }
+
+        if (schema.FieldsList[index].DataType is not DurationType durationType)
+        {
+            error = $"Expected field '{expectedFieldName}' to use DurationType.";
+            return false;
+        }
+
+        if (durationType.Unit != expectedUnit)
+        {
+            error = $"Expected field '{expectedFieldName}' to use {expectedUnit} duration unit but got {durationType.Unit}.";
             return false;
         }
 
@@ -206,6 +269,37 @@ public static class ArrowSchemaValidation
         if (!string.Equals(actualTimezone, expectedTimezone, StringComparison.Ordinal))
         {
             error = $"Expected field '{expectedFieldName}' to use timezone '{expectedTimezone}' but got '{actualTimezone}'.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Validates that a schema field is an interval field with the expected unit.
+    /// </summary>
+    public static bool TryValidateIntervalField(
+        Schema schema,
+        string expectedFieldName,
+        IntervalUnit expectedUnit,
+        out int index,
+        out string? error)
+    {
+        if (!TryValidateField(schema, expectedFieldName, ArrowTypeId.Interval, out index, out error))
+        {
+            return false;
+        }
+
+        if (schema.FieldsList[index].DataType is not IntervalType intervalType)
+        {
+            error = $"Expected field '{expectedFieldName}' to use IntervalType.";
+            return false;
+        }
+
+        if (intervalType.Unit != expectedUnit)
+        {
+            error = $"Expected field '{expectedFieldName}' to use {expectedUnit} interval unit but got {intervalType.Unit}.";
             return false;
         }
 
@@ -285,6 +379,95 @@ public static class ArrowSchemaValidation
         {
             error = $"Expected field '{expectedFieldName}' to use scale {expectedScale} but got {decimalType.Scale}.";
             return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Validates that a schema field is a union field with the expected mode and child-field contract.
+    /// </summary>
+    public static bool TryValidateUnionField(
+        Schema schema,
+        string expectedFieldName,
+        UnionMode expectedMode,
+        IReadOnlyList<string> expectedChildFieldNames,
+        IReadOnlyList<ArrowTypeId> expectedChildTypeIds,
+        IReadOnlyList<int> expectedTypeIds,
+        out int index,
+        out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(schema);
+        ArgumentNullException.ThrowIfNull(expectedChildFieldNames);
+        ArgumentNullException.ThrowIfNull(expectedChildTypeIds);
+        ArgumentNullException.ThrowIfNull(expectedTypeIds);
+
+        if (expectedChildFieldNames.Count != expectedChildTypeIds.Count ||
+            expectedChildFieldNames.Count != expectedTypeIds.Count)
+        {
+            index = -1;
+            error = "Expected union child-field-name, type-id, and union-type-id lists to have the same length.";
+            return false;
+        }
+
+        if (!TryValidateField(schema, expectedFieldName, ArrowTypeId.Union, out index, out error))
+        {
+            return false;
+        }
+
+        if (schema.FieldsList[index].DataType is not UnionType unionType)
+        {
+            error = $"Expected field '{expectedFieldName}' to use UnionType.";
+            return false;
+        }
+
+        if (unionType.Mode != expectedMode)
+        {
+            error = $"Expected field '{expectedFieldName}' to use {expectedMode} union mode but got {unionType.Mode}.";
+            return false;
+        }
+
+        if (unionType.Fields.Count != expectedChildFieldNames.Count)
+        {
+            error =
+                $"Expected union field '{expectedFieldName}' to contain {expectedChildFieldNames.Count} child fields but got {unionType.Fields.Count}.";
+            return false;
+        }
+
+        if (unionType.TypeIds.Length != expectedTypeIds.Count)
+        {
+            error =
+                $"Expected union field '{expectedFieldName}' to contain {expectedTypeIds.Count} type ids but got {unionType.TypeIds.Length}.";
+            return false;
+        }
+
+        for (var childIndex = 0; childIndex < expectedChildFieldNames.Count; childIndex++)
+        {
+            var actualField = unionType.Fields[childIndex];
+            var expectedChildFieldName = expectedChildFieldNames[childIndex];
+            if (!string.Equals(actualField.Name, expectedChildFieldName, StringComparison.Ordinal))
+            {
+                error =
+                    $"Expected union field '{expectedFieldName}' child {childIndex} to be '{expectedChildFieldName}' but got '{actualField.Name}'.";
+                return false;
+            }
+
+            var expectedChildTypeId = expectedChildTypeIds[childIndex];
+            if (actualField.DataType.TypeId != expectedChildTypeId)
+            {
+                error =
+                    $"Expected union field '{expectedFieldName}' child '{actualField.Name}' to have type {expectedChildTypeId} but got {actualField.DataType.TypeId}.";
+                return false;
+            }
+
+            var expectedUnionTypeId = expectedTypeIds[childIndex];
+            if (unionType.TypeIds[childIndex] != expectedUnionTypeId)
+            {
+                error =
+                    $"Expected union field '{expectedFieldName}' child '{actualField.Name}' to use union type id {expectedUnionTypeId} but got {unionType.TypeIds[childIndex]}.";
+                return false;
+            }
         }
 
         error = null;

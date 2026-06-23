@@ -107,7 +107,14 @@ internal sealed class OperatorHost
     }
 }
 
+/// <summary>
+/// Creates managed operator instances for registration with the Dora runtime.
+/// </summary>
 public abstract class OperatorFactory
 {
+    /// <summary>
+    /// Creates a new managed operator instance.
+    /// </summary>
+    /// <returns>The operator instance to bind to native callbacks.</returns>
     public abstract DoraOperatorBase CreateOperator();
 }

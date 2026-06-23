@@ -1,5 +1,7 @@
 using System.Text;
 using Apache.Arrow;
+using Apache.Arrow.Arrays;
+using Apache.Arrow.Scalars;
 using Apache.Arrow.Types;
 
 namespace DoraOperator;
@@ -178,6 +180,31 @@ public static class ArrowRecordBatchProjector
     }
 
     /// <summary>
+    /// Projects a FixedSizeBinary column into a managed row collection.
+    /// </summary>
+    public static bool TryProjectFixedSizeBinaryColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        int expectedByteWidth,
+        out IReadOnlyList<byte[]>? rows,
+        out string? error)
+    {
+        rows = null;
+        if (!ArrowRecordBatchAssertions.TryGetFixedSizeBinaryColumn(recordBatch, fieldName, expectedByteWidth, out var column, out error))
+        {
+            return false;
+        }
+
+        if (column is null)
+        {
+            error = $"Expected FixedSizeBinary column '{fieldName}' but the resolved Arrow array was null.";
+            return false;
+        }
+
+        return TryProjectFixedSizeBinaryColumn(column, fieldName, out rows, out error);
+    }
+
+    /// <summary>
     /// Projects a Date32 column into a managed row collection.
     /// </summary>
     public static bool TryProjectDate32Column(
@@ -200,6 +227,31 @@ public static class ArrowRecordBatchProjector
         }
 
         return TryProjectDate32Column(column, fieldName, out rows, out error);
+    }
+
+    /// <summary>
+    /// Projects a Duration column into a managed row collection.
+    /// </summary>
+    public static bool TryProjectDurationColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        TimeUnit expectedUnit,
+        out IReadOnlyList<TimeSpan>? rows,
+        out string? error)
+    {
+        rows = null;
+        if (!ArrowRecordBatchAssertions.TryGetDurationColumn(recordBatch, fieldName, expectedUnit, out var column, out error))
+        {
+            return false;
+        }
+
+        if (column is null)
+        {
+            error = $"Expected Duration column '{fieldName}' but the resolved Arrow array was null.";
+            return false;
+        }
+
+        return TryProjectDurationColumn(column, fieldName, out rows, out error);
     }
 
     /// <summary>
@@ -232,6 +284,78 @@ public static class ArrowRecordBatchProjector
         }
 
         return TryProjectTimestampColumn(column, fieldName, out rows, out error);
+    }
+
+    /// <summary>
+    /// Projects a YearMonth interval column into a managed row collection.
+    /// </summary>
+    public static bool TryProjectYearMonthIntervalColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        out IReadOnlyList<YearMonthInterval>? rows,
+        out string? error)
+    {
+        rows = null;
+        if (!ArrowRecordBatchAssertions.TryGetYearMonthIntervalColumn(recordBatch, fieldName, out var column, out error))
+        {
+            return false;
+        }
+
+        if (column is null)
+        {
+            error = $"Expected YearMonth interval column '{fieldName}' but the resolved Arrow array was null.";
+            return false;
+        }
+
+        return TryProjectYearMonthIntervalColumn(column, fieldName, out rows, out error);
+    }
+
+    /// <summary>
+    /// Projects a DayTime interval column into a managed row collection.
+    /// </summary>
+    public static bool TryProjectDayTimeIntervalColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        out IReadOnlyList<DayTimeInterval>? rows,
+        out string? error)
+    {
+        rows = null;
+        if (!ArrowRecordBatchAssertions.TryGetDayTimeIntervalColumn(recordBatch, fieldName, out var column, out error))
+        {
+            return false;
+        }
+
+        if (column is null)
+        {
+            error = $"Expected DayTime interval column '{fieldName}' but the resolved Arrow array was null.";
+            return false;
+        }
+
+        return TryProjectDayTimeIntervalColumn(column, fieldName, out rows, out error);
+    }
+
+    /// <summary>
+    /// Projects a MonthDayNanosecond interval column into a managed row collection.
+    /// </summary>
+    public static bool TryProjectMonthDayNanosecondIntervalColumn(
+        RecordBatch recordBatch,
+        string fieldName,
+        out IReadOnlyList<MonthDayNanosecondInterval>? rows,
+        out string? error)
+    {
+        rows = null;
+        if (!ArrowRecordBatchAssertions.TryGetMonthDayNanosecondIntervalColumn(recordBatch, fieldName, out var column, out error))
+        {
+            return false;
+        }
+
+        if (column is null)
+        {
+            error = $"Expected MonthDayNanosecond interval column '{fieldName}' but the resolved Arrow array was null.";
+            return false;
+        }
+
+        return TryProjectMonthDayNanosecondIntervalColumn(column, fieldName, out rows, out error);
     }
 
     /// <summary>
@@ -644,6 +768,24 @@ public static class ArrowRecordBatchProjector
         return true;
     }
 
+    internal static bool TryProjectFixedSizeBinaryColumn(
+        FixedSizeBinaryArray column,
+        string fieldName,
+        out IReadOnlyList<byte[]>? rows,
+        out string? error)
+    {
+        rows = null;
+        var projectedRows = new byte[column.Length][];
+        for (var rowIndex = 0; rowIndex < column.Length; rowIndex++)
+        {
+            projectedRows[rowIndex] = column.GetBytes(rowIndex).ToArray();
+        }
+
+        rows = projectedRows;
+        error = null;
+        return true;
+    }
+
     internal static bool TryProjectDate32Column(
         Date32Array column,
         string fieldName,
@@ -658,6 +800,31 @@ public static class ArrowRecordBatchProjector
             if (value is null)
             {
                 error = $"Expected Date32 column '{fieldName}' value at row {rowIndex} to be non-null.";
+                return false;
+            }
+
+            projectedRows[rowIndex] = value.Value;
+        }
+
+        rows = projectedRows;
+        error = null;
+        return true;
+    }
+
+    internal static bool TryProjectDurationColumn(
+        DurationArray column,
+        string fieldName,
+        out IReadOnlyList<TimeSpan>? rows,
+        out string? error)
+    {
+        rows = null;
+        var projectedRows = new TimeSpan[column.Length];
+        for (var rowIndex = 0; rowIndex < column.Length; rowIndex++)
+        {
+            var value = column.GetTimeSpan(rowIndex);
+            if (value is null)
+            {
+                error = $"Expected Duration column '{fieldName}' value at row {rowIndex} to be non-null.";
                 return false;
             }
 
@@ -687,6 +854,60 @@ public static class ArrowRecordBatchProjector
             }
 
             projectedRows[rowIndex] = value.Value;
+        }
+
+        rows = projectedRows;
+        error = null;
+        return true;
+    }
+
+    internal static bool TryProjectYearMonthIntervalColumn(
+        YearMonthIntervalArray column,
+        string fieldName,
+        out IReadOnlyList<YearMonthInterval>? rows,
+        out string? error)
+    {
+        rows = null;
+        var projectedRows = new YearMonthInterval[column.Length];
+        for (var rowIndex = 0; rowIndex < column.Length; rowIndex++)
+        {
+            projectedRows[rowIndex] = column.Values[rowIndex];
+        }
+
+        rows = projectedRows;
+        error = null;
+        return true;
+    }
+
+    internal static bool TryProjectDayTimeIntervalColumn(
+        DayTimeIntervalArray column,
+        string fieldName,
+        out IReadOnlyList<DayTimeInterval>? rows,
+        out string? error)
+    {
+        rows = null;
+        var projectedRows = new DayTimeInterval[column.Length];
+        for (var rowIndex = 0; rowIndex < column.Length; rowIndex++)
+        {
+            projectedRows[rowIndex] = column.Values[rowIndex];
+        }
+
+        rows = projectedRows;
+        error = null;
+        return true;
+    }
+
+    internal static bool TryProjectMonthDayNanosecondIntervalColumn(
+        MonthDayNanosecondIntervalArray column,
+        string fieldName,
+        out IReadOnlyList<MonthDayNanosecondInterval>? rows,
+        out string? error)
+    {
+        rows = null;
+        var projectedRows = new MonthDayNanosecondInterval[column.Length];
+        for (var rowIndex = 0; rowIndex < column.Length; rowIndex++)
+        {
+            projectedRows[rowIndex] = column.Values[rowIndex];
         }
 
         rows = projectedRows;
@@ -744,6 +965,9 @@ public static class ArrowRecordBatchProjector
         return true;
     }
 
+    /// <summary>
+    /// Projects each record-batch row into a managed model using typed top-level field accessors.
+    /// </summary>
     public static bool TryProjectRows<TModel>(
         RecordBatch recordBatch,
         IReadOnlyList<string> expectedFieldNames,
@@ -866,6 +1090,9 @@ public static class ArrowRecordBatchProjector
     }
 }
 
+/// <summary>
+/// Row-level accessor for projecting Arrow RecordBatch rows into managed models.
+/// </summary>
 public sealed class ArrowRecordBatchRowAccessor
 {
     private readonly ArrowRecordBatchColumnProjector _projector;
@@ -910,13 +1137,38 @@ public sealed class ArrowRecordBatchRowAccessor
     /// </summary>
     public bool TryGetBinary(string fieldName, out byte[] value, out string? error) => _projector.TryGetBinary(RowIndex, fieldName, out value, out error);
     /// <summary>
+    /// Tries to read a FixedSizeBinary field from the current row.
+    /// </summary>
+    public bool TryGetFixedSizeBinary(string fieldName, int expectedByteWidth, out byte[] value, out string? error) =>
+        _projector.TryGetFixedSizeBinary(RowIndex, fieldName, expectedByteWidth, out value, out error);
+    /// <summary>
     /// Tries to read a Date32 field from the current row.
     /// </summary>
     public bool TryGetDate32(string fieldName, DateUnit expectedUnit, out DateOnly value, out string? error) => _projector.TryGetDate32(RowIndex, fieldName, expectedUnit, out value, out error);
     /// <summary>
+    /// Tries to read a Duration field from the current row.
+    /// </summary>
+    public bool TryGetDuration(string fieldName, TimeUnit expectedUnit, out TimeSpan value, out string? error) =>
+        _projector.TryGetDuration(RowIndex, fieldName, expectedUnit, out value, out error);
+    /// <summary>
     /// Tries to read a Timestamp field from the current row.
     /// </summary>
     public bool TryGetTimestamp(string fieldName, TimeUnit expectedUnit, string? expectedTimezone, out DateTimeOffset value, out string? error) => _projector.TryGetTimestamp(RowIndex, fieldName, expectedUnit, expectedTimezone, out value, out error);
+    /// <summary>
+    /// Tries to read a YearMonth interval field from the current row.
+    /// </summary>
+    public bool TryGetYearMonthInterval(string fieldName, out YearMonthInterval value, out string? error) =>
+        _projector.TryGetYearMonthInterval(RowIndex, fieldName, out value, out error);
+    /// <summary>
+    /// Tries to read a DayTime interval field from the current row.
+    /// </summary>
+    public bool TryGetDayTimeInterval(string fieldName, out DayTimeInterval value, out string? error) =>
+        _projector.TryGetDayTimeInterval(RowIndex, fieldName, out value, out error);
+    /// <summary>
+    /// Tries to read a MonthDayNanosecond interval field from the current row.
+    /// </summary>
+    public bool TryGetMonthDayNanosecondInterval(string fieldName, out MonthDayNanosecondInterval value, out string? error) =>
+        _projector.TryGetMonthDayNanosecondInterval(RowIndex, fieldName, out value, out error);
     /// <summary>
     /// Tries to read a Decimal128 field from the current row.
     /// </summary>
@@ -1153,6 +1405,31 @@ internal sealed class ArrowRecordBatchColumnProjector
         return true;
     }
 
+    public bool TryGetFixedSizeBinary(int rowIndex, string fieldName, int expectedByteWidth, out byte[] value, out string? error)
+    {
+        value = System.Array.Empty<byte>();
+        if (!TryGetTypedColumn(fieldName, ArrowTypeId.FixedSizedBinary, out FixedSizeBinaryArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (column.Data.DataType is not FixedSizeBinaryType fixedSizeBinaryType || fixedSizeBinaryType.ByteWidth != expectedByteWidth)
+        {
+            var actualWidth = column.Data.DataType is FixedSizeBinaryType actualType ? actualType.ByteWidth.ToString() : column.Data.DataType.Name;
+            error = $"Expected column '{fieldName}' to use FixedSizeBinary({expectedByteWidth}) but got {actualWidth}.";
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, fieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        value = column.GetBytes(rowIndex).ToArray();
+        error = null;
+        return true;
+    }
+
     public bool TryGetDate32(int rowIndex, string fieldName, DateUnit expectedUnit, out DateOnly value, out string? error)
     {
         value = default;
@@ -1177,6 +1454,37 @@ internal sealed class ArrowRecordBatchColumnProjector
         if (actual is null)
         {
             error = $"Expected Date32 column '{fieldName}' value at row {rowIndex} to be non-null.";
+            return false;
+        }
+
+        value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetDuration(int rowIndex, string fieldName, TimeUnit expectedUnit, out TimeSpan value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedColumn(fieldName, ArrowTypeId.Duration, out DurationArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (column.DataType.Unit != expectedUnit)
+        {
+            error = $"Expected column '{fieldName}' to use Duration({expectedUnit}) but got Duration({column.DataType.Unit}).";
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, fieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        var actual = column.GetTimeSpan(rowIndex);
+        if (actual is null)
+        {
+            error = $"Expected Duration column '{fieldName}' value at row {rowIndex} to be non-null.";
             return false;
         }
 
@@ -1218,6 +1526,60 @@ internal sealed class ArrowRecordBatchColumnProjector
         }
 
         value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetYearMonthInterval(int rowIndex, string fieldName, out YearMonthInterval value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedColumn(fieldName, ArrowTypeId.Interval, out YearMonthIntervalArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, fieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        value = column.Values[rowIndex];
+        error = null;
+        return true;
+    }
+
+    public bool TryGetDayTimeInterval(int rowIndex, string fieldName, out DayTimeInterval value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedColumn(fieldName, ArrowTypeId.Interval, out DayTimeIntervalArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, fieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        value = column.Values[rowIndex];
+        error = null;
+        return true;
+    }
+
+    public bool TryGetMonthDayNanosecondInterval(int rowIndex, string fieldName, out MonthDayNanosecondInterval value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedColumn(fieldName, ArrowTypeId.Interval, out MonthDayNanosecondIntervalArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, fieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        value = column.Values[rowIndex];
         error = null;
         return true;
     }
@@ -1425,6 +1787,9 @@ internal sealed class ArrowRecordBatchColumnProjector
     }
 }
 
+/// <summary>
+/// Row-level accessor for projecting Arrow Struct rows into managed models.
+/// </summary>
 public sealed class ArrowStructRowAccessor
 {
     private readonly ArrowStructColumnProjector _projector;
@@ -1469,13 +1834,38 @@ public sealed class ArrowStructRowAccessor
     /// </summary>
     public bool TryGetBinary(string childFieldName, out byte[] value, out string? error) => _projector.TryGetBinary(RowIndex, childFieldName, out value, out error);
     /// <summary>
+    /// Tries to read a FixedSizeBinary child field from the current struct row.
+    /// </summary>
+    public bool TryGetFixedSizeBinary(string childFieldName, int expectedByteWidth, out byte[] value, out string? error) =>
+        _projector.TryGetFixedSizeBinary(RowIndex, childFieldName, expectedByteWidth, out value, out error);
+    /// <summary>
     /// Tries to read a Date32 child field from the current struct row.
     /// </summary>
     public bool TryGetDate32(string childFieldName, DateUnit expectedUnit, out DateOnly value, out string? error) => _projector.TryGetDate32(RowIndex, childFieldName, expectedUnit, out value, out error);
     /// <summary>
+    /// Tries to read a Duration child field from the current struct row.
+    /// </summary>
+    public bool TryGetDuration(string childFieldName, TimeUnit expectedUnit, out TimeSpan value, out string? error) =>
+        _projector.TryGetDuration(RowIndex, childFieldName, expectedUnit, out value, out error);
+    /// <summary>
     /// Tries to read a Timestamp child field from the current struct row.
     /// </summary>
     public bool TryGetTimestamp(string childFieldName, TimeUnit expectedUnit, string? expectedTimezone, out DateTimeOffset value, out string? error) => _projector.TryGetTimestamp(RowIndex, childFieldName, expectedUnit, expectedTimezone, out value, out error);
+    /// <summary>
+    /// Tries to read a YearMonth interval child field from the current struct row.
+    /// </summary>
+    public bool TryGetYearMonthInterval(string childFieldName, out YearMonthInterval value, out string? error) =>
+        _projector.TryGetYearMonthInterval(RowIndex, childFieldName, out value, out error);
+    /// <summary>
+    /// Tries to read a DayTime interval child field from the current struct row.
+    /// </summary>
+    public bool TryGetDayTimeInterval(string childFieldName, out DayTimeInterval value, out string? error) =>
+        _projector.TryGetDayTimeInterval(RowIndex, childFieldName, out value, out error);
+    /// <summary>
+    /// Tries to read a MonthDayNanosecond interval child field from the current struct row.
+    /// </summary>
+    public bool TryGetMonthDayNanosecondInterval(string childFieldName, out MonthDayNanosecondInterval value, out string? error) =>
+        _projector.TryGetMonthDayNanosecondInterval(RowIndex, childFieldName, out value, out error);
     /// <summary>
     /// Tries to read a Decimal128 child field from the current struct row.
     /// </summary>
@@ -1716,6 +2106,31 @@ internal sealed class ArrowStructColumnProjector
         return true;
     }
 
+    public bool TryGetFixedSizeBinary(int rowIndex, string childFieldName, int expectedByteWidth, out byte[] value, out string? error)
+    {
+        value = System.Array.Empty<byte>();
+        if (!TryGetTypedChildColumn(childFieldName, ArrowTypeId.FixedSizedBinary, out FixedSizeBinaryArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (column.Data.DataType is not FixedSizeBinaryType fixedSizeBinaryType || fixedSizeBinaryType.ByteWidth != expectedByteWidth)
+        {
+            var actualWidth = column.Data.DataType is FixedSizeBinaryType actualType ? actualType.ByteWidth.ToString() : column.Data.DataType.Name;
+            error = $"Expected struct field '{_fieldName}.{childFieldName}' to use FixedSizeBinary({expectedByteWidth}) but got {actualWidth}.";
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, childFieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        value = column.GetBytes(rowIndex).ToArray();
+        error = null;
+        return true;
+    }
+
     public bool TryGetDate32(int rowIndex, string childFieldName, DateUnit expectedUnit, out DateOnly value, out string? error)
     {
         value = default;
@@ -1737,6 +2152,37 @@ internal sealed class ArrowStructColumnProjector
         }
 
         var actual = column.GetDateOnly(rowIndex);
+        if (actual is null)
+        {
+            error = $"Expected struct field '{_fieldName}.{childFieldName}' value at row {rowIndex} to be non-null.";
+            return false;
+        }
+
+        value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetDuration(int rowIndex, string childFieldName, TimeUnit expectedUnit, out TimeSpan value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedChildColumn(childFieldName, ArrowTypeId.Duration, out DurationArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (column.DataType.Unit != expectedUnit)
+        {
+            error = $"Expected struct field '{_fieldName}.{childFieldName}' to use Duration({expectedUnit}) but got Duration({column.DataType.Unit}).";
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, childFieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        var actual = column.GetTimeSpan(rowIndex);
         if (actual is null)
         {
             error = $"Expected struct field '{_fieldName}.{childFieldName}' value at row {rowIndex} to be non-null.";
@@ -1781,6 +2227,60 @@ internal sealed class ArrowStructColumnProjector
         }
 
         value = actual.Value;
+        error = null;
+        return true;
+    }
+
+    public bool TryGetYearMonthInterval(int rowIndex, string childFieldName, out YearMonthInterval value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedChildColumn(childFieldName, ArrowTypeId.Interval, out YearMonthIntervalArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, childFieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        value = column.Values[rowIndex];
+        error = null;
+        return true;
+    }
+
+    public bool TryGetDayTimeInterval(int rowIndex, string childFieldName, out DayTimeInterval value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedChildColumn(childFieldName, ArrowTypeId.Interval, out DayTimeIntervalArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, childFieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        value = column.Values[rowIndex];
+        error = null;
+        return true;
+    }
+
+    public bool TryGetMonthDayNanosecondInterval(int rowIndex, string childFieldName, out MonthDayNanosecondInterval value, out string? error)
+    {
+        value = default;
+        if (!TryGetTypedChildColumn(childFieldName, ArrowTypeId.Interval, out MonthDayNanosecondIntervalArray? column, out error) || column is null)
+        {
+            return false;
+        }
+
+        if (!TryEnsureRowIndex(rowIndex, childFieldName, column.Length, out error))
+        {
+            return false;
+        }
+
+        value = column.Values[rowIndex];
         error = null;
         return true;
     }

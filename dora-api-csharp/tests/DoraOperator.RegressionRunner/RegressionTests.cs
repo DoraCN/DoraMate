@@ -1,3 +1,6 @@
+using System.Text;
+using Apache.Arrow;
+using Apache.Arrow.Scalars;
 using Apache.Arrow.Types;
 using DoraOperator;
 using Xunit;
@@ -302,6 +305,185 @@ public sealed class RegressionTests
     }
 
     [Fact]
+    public void ExtendedScalarProjectionCoversFixedDurationIntervalAndUnionAssertions()
+    {
+        using var batch = AdvancedExtendedFixture.CreateRecordBatch();
+
+        TestAssert.True(
+            ArrowRecordBatchProjector.TryProjectFixedSizeBinaryColumn(
+                batch,
+                AdvancedExtendedFixture.FixedPayloadFieldName,
+                AdvancedExtendedFixture.ExpectedFixedPayloadByteWidth,
+                out var fixedPayloads,
+                out var error),
+            error);
+        TestAssert.ByteMatrixEqual(AdvancedExtendedFixture.ExpectedFixedPayloads, fixedPayloads, "fixed payloads");
+
+        TestAssert.True(
+            ArrowRecordBatchProjector.TryProjectDurationColumn(
+                batch,
+                AdvancedExtendedFixture.ProcessingTimeFieldName,
+                AdvancedExtendedFixture.ExpectedDurationUnit,
+                out var processingTimes,
+                out error),
+            error);
+        TestAssert.SequenceEqual(AdvancedExtendedFixture.ExpectedProcessingTimes, processingTimes, "processing times");
+
+        TestAssert.True(
+            ArrowRecordBatchProjector.TryProjectYearMonthIntervalColumn(
+                batch,
+                AdvancedExtendedFixture.BillingCycleFieldName,
+                out var billingCycles,
+                out error),
+            error);
+        TestAssert.SequenceEqual(AdvancedExtendedFixture.ExpectedBillingCycles, billingCycles, "billing cycles");
+
+        TestAssert.True(
+            ArrowRecordBatchProjector.TryProjectDayTimeIntervalColumn(
+                batch,
+                AdvancedExtendedFixture.RetryWindowFieldName,
+                out var retryWindows,
+                out error),
+            error);
+        TestAssert.SequenceEqual(AdvancedExtendedFixture.ExpectedRetryWindows, retryWindows, "retry windows");
+
+        TestAssert.True(
+            ArrowRecordBatchProjector.TryProjectMonthDayNanosecondIntervalColumn(
+                batch,
+                AdvancedExtendedFixture.MaintenanceWindowFieldName,
+                out var maintenanceWindows,
+                out error),
+            error);
+        TestAssert.SequenceEqual(AdvancedExtendedFixture.ExpectedMaintenanceWindows, maintenanceWindows, "maintenance windows");
+
+        TestAssert.True(
+            ArrowRecordBatchAssertions.TryGetDenseUnionColumn(
+                batch,
+                AdvancedExtendedFixture.ResultFieldName,
+                AdvancedExtendedFixture.ExpectedUnionChildFieldNames,
+                AdvancedExtendedFixture.ExpectedUnionChildTypeIds,
+                AdvancedExtendedFixture.ExpectedUnionTypeIds,
+                out var unionColumn,
+                out error),
+            error);
+
+        TestAssert.NotNull(unionColumn, "union column");
+        TestAssert.SequenceEqual(AdvancedExtendedFixture.ExpectedUnionRowTypeIds, unionColumn!.TypeIds.ToArray(), "union type ids");
+        TestAssert.Equal("ok", ((StringArray)unionColumn.Fields[0]).GetString(0, Encoding.UTF8)!, "union status");
+        TestAssert.Equal(42, ((Int32Array)unionColumn.Fields[1]).GetValue(0)!.Value, "union code");
+    }
+
+    [Fact]
+    public void ExtendedRowAndStructAccessorsCoverFixedDurationAndIntervals()
+    {
+        using var batch = AdvancedExtendedFixture.CreateRecordBatch();
+
+        TestAssert.True(
+            ArrowRecordBatchProjector.TryProjectRows(
+                batch,
+                AdvancedExtendedFixture.ExpectedFieldNames,
+                AdvancedExtendedFixture.ExpectedTypeIds,
+                static (ArrowRecordBatchRowAccessor row, out ExtendedScalarRowModel? model, out string? error) =>
+                {
+                    model = null;
+                    error = null;
+
+                    if (!row.TryGetFixedSizeBinary(
+                            AdvancedExtendedFixture.FixedPayloadFieldName,
+                            AdvancedExtendedFixture.ExpectedFixedPayloadByteWidth,
+                            out var fixedPayload,
+                            out error) ||
+                        !row.TryGetDuration(
+                            AdvancedExtendedFixture.ProcessingTimeFieldName,
+                            AdvancedExtendedFixture.ExpectedDurationUnit,
+                            out var processingTime,
+                            out error) ||
+                        !row.TryGetYearMonthInterval(AdvancedExtendedFixture.BillingCycleFieldName, out var billingCycle, out error) ||
+                        !row.TryGetDayTimeInterval(AdvancedExtendedFixture.RetryWindowFieldName, out var retryWindow, out error) ||
+                        !row.TryGetMonthDayNanosecondInterval(AdvancedExtendedFixture.MaintenanceWindowFieldName, out var maintenanceWindow, out error))
+                    {
+                        return false;
+                    }
+
+                    model = new ExtendedScalarRowModel(
+                        fixedPayload,
+                        processingTime,
+                        billingCycle,
+                        retryWindow,
+                        maintenanceWindow);
+                    return true;
+                },
+                out var rows,
+                out var projectionError),
+            projectionError);
+
+        TestAssert.NotNull(rows, "extended rows");
+        TestAssert.Equal(AdvancedExtendedFixture.ExpectedRowCount, rows!.Count, "extended row count");
+        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        {
+            var actual = rows[rowIndex];
+            TestAssert.ByteEqual(AdvancedExtendedFixture.ExpectedFixedPayloads[rowIndex], actual.FixedPayload, $"extended row {rowIndex} fixed payload");
+            TestAssert.Equal(AdvancedExtendedFixture.ExpectedProcessingTimes[rowIndex], actual.ProcessingTime, $"extended row {rowIndex} processing time");
+            TestAssert.Equal(AdvancedExtendedFixture.ExpectedBillingCycles[rowIndex], actual.BillingCycle, $"extended row {rowIndex} billing cycle");
+            TestAssert.Equal(AdvancedExtendedFixture.ExpectedRetryWindows[rowIndex], actual.RetryWindow, $"extended row {rowIndex} retry window");
+            TestAssert.Equal(AdvancedExtendedFixture.ExpectedMaintenanceWindows[rowIndex], actual.MaintenanceWindow, $"extended row {rowIndex} maintenance window");
+        }
+
+        using var structBatch = AdvancedExtendedStructFixture.CreateRecordBatch();
+        TestAssert.True(
+            ArrowRecordBatchProjector.TryProjectStructColumn(
+                structBatch,
+                AdvancedExtendedStructFixture.StructFieldName,
+                AdvancedExtendedStructFixture.ExpectedChildFieldNames,
+                AdvancedExtendedStructFixture.ExpectedChildTypeIds,
+                static (ArrowStructRowAccessor row, out ExtendedStructRowModel? model, out string? error) =>
+                {
+                    model = null;
+                    error = null;
+
+                    if (!row.TryGetFixedSizeBinary(
+                            AdvancedExtendedStructFixture.FixedPayloadFieldName,
+                            AdvancedExtendedFixture.ExpectedFixedPayloadByteWidth,
+                            out var fixedPayload,
+                            out error) ||
+                        !row.TryGetDuration(
+                            AdvancedExtendedStructFixture.ProcessingTimeFieldName,
+                            AdvancedExtendedFixture.ExpectedDurationUnit,
+                            out var processingTime,
+                            out error) ||
+                        !row.TryGetYearMonthInterval(AdvancedExtendedStructFixture.BillingCycleFieldName, out var billingCycle, out error) ||
+                        !row.TryGetDayTimeInterval(AdvancedExtendedStructFixture.RetryWindowFieldName, out var retryWindow, out error) ||
+                        !row.TryGetMonthDayNanosecondInterval(AdvancedExtendedStructFixture.MaintenanceWindowFieldName, out var maintenanceWindow, out error))
+                    {
+                        return false;
+                    }
+
+                    model = new ExtendedStructRowModel(
+                        fixedPayload,
+                        processingTime,
+                        billingCycle,
+                        retryWindow,
+                        maintenanceWindow);
+                    return true;
+                },
+                out var structRows,
+                out projectionError),
+            projectionError);
+
+        TestAssert.NotNull(structRows, "extended struct rows");
+        TestAssert.Equal(AdvancedExtendedStructFixture.ExpectedRowCount, structRows!.Count, "extended struct row count");
+        for (var rowIndex = 0; rowIndex < structRows.Count; rowIndex++)
+        {
+            var actual = structRows[rowIndex];
+            TestAssert.ByteEqual(AdvancedExtendedFixture.ExpectedFixedPayloads[rowIndex], actual.FixedPayload, $"extended struct row {rowIndex} fixed payload");
+            TestAssert.Equal(AdvancedExtendedFixture.ExpectedProcessingTimes[rowIndex], actual.ProcessingTime, $"extended struct row {rowIndex} processing time");
+            TestAssert.Equal(AdvancedExtendedFixture.ExpectedBillingCycles[rowIndex], actual.BillingCycle, $"extended struct row {rowIndex} billing cycle");
+            TestAssert.Equal(AdvancedExtendedFixture.ExpectedRetryWindows[rowIndex], actual.RetryWindow, $"extended struct row {rowIndex} retry window");
+            TestAssert.Equal(AdvancedExtendedFixture.ExpectedMaintenanceWindows[rowIndex], actual.MaintenanceWindow, $"extended struct row {rowIndex} maintenance window");
+        }
+    }
+
+    [Fact]
     public void ComplexContractProjectsExpectedModel()
     {
         var batch = ComplexContractFixture.CreateRecordBatch();
@@ -375,4 +557,18 @@ internal sealed record StructRowModel(
     DateTimeOffset EventTime,
     decimal Amount128,
     decimal Amount256);
+
+internal sealed record ExtendedScalarRowModel(
+    byte[] FixedPayload,
+    TimeSpan ProcessingTime,
+    YearMonthInterval BillingCycle,
+    DayTimeInterval RetryWindow,
+    MonthDayNanosecondInterval MaintenanceWindow);
+
+internal sealed record ExtendedStructRowModel(
+    byte[] FixedPayload,
+    TimeSpan ProcessingTime,
+    YearMonthInterval BillingCycle,
+    DayTimeInterval RetryWindow,
+    MonthDayNanosecondInterval MaintenanceWindow);
 

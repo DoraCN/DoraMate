@@ -60,6 +60,20 @@ if ($LASTEXITCODE -ne 0) {
     throw "dotnet pack failed for DoraOperator with exit code $LASTEXITCODE"
 }
 
+# Pack dotnet new template package
+Write-Host "[package-nuget] Packing DoraMate.Templates..."
+dotnet pack (Join-Path $repoRoot "templates\DoraMate.Templates.csproj") `
+    -c $Configuration `
+    -o $outDir `
+    $noBuildArg `
+    -p:NuGetAudit=false `
+    -p:Version=$Version `
+    -p:Authors="DoraMate" `
+    -p:RepositoryUrl=https://github.com/dora-rs/doramate
+if ($LASTEXITCODE -ne 0) {
+    throw "dotnet pack failed for DoraMate.Templates with exit code $LASTEXITCODE"
+}
+
 Write-Host "[package-nuget] Packages created in $outDir"
 Get-ChildItem $outDir -Filter "*.nupkg" | ForEach-Object {
     Write-Host "  $($_.Name) ($([math]::Round($_.Length / 1KB)) KB)"

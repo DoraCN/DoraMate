@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DoraMate.DoraNode" Version="0.2.0" />
+    <PackageReference Include="DoraMate.DoraNode" Version="0.10.0" />
   </ItemGroup>
 
 </Project>

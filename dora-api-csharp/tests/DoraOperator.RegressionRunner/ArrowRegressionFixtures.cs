@@ -1,5 +1,7 @@
 using Apache.Arrow;
+using Apache.Arrow.Arrays;
 using Apache.Arrow.Memory;
+using Apache.Arrow.Scalars;
 using Apache.Arrow.Types;
 using DoraOperator;
 
@@ -366,6 +368,311 @@ internal static class AdvancedStructFixture
                     eventTimeBuilder.Build(),
                     amount128Builder.Build(),
                     amount256Builder.Build()
+                },
+                ArrowBuffer.Empty,
+                0,
+                0)
+        };
+
+        return new RecordBatch(schema, columns, ExpectedRowCount);
+    }
+}
+
+internal static class AdvancedExtendedFixture
+{
+    public static readonly KeyValuePair<string, string>[] EmptyMetadata = [];
+
+    public const string FixedPayloadFieldName = "fixed_payload";
+    public const string ProcessingTimeFieldName = "processing_time";
+    public const string BillingCycleFieldName = "billing_cycle";
+    public const string RetryWindowFieldName = "retry_window";
+    public const string MaintenanceWindowFieldName = "maintenance_window";
+    public const string ResultFieldName = "result";
+
+    public static readonly string[] ExpectedFieldNames =
+    [
+        FixedPayloadFieldName,
+        ProcessingTimeFieldName,
+        BillingCycleFieldName,
+        RetryWindowFieldName,
+        MaintenanceWindowFieldName,
+        ResultFieldName
+    ];
+
+    public static readonly ArrowTypeId[] ExpectedTypeIds =
+    [
+        ArrowTypeId.FixedSizedBinary,
+        ArrowTypeId.Duration,
+        ArrowTypeId.Interval,
+        ArrowTypeId.Interval,
+        ArrowTypeId.Interval,
+        ArrowTypeId.Union
+    ];
+
+    public static readonly byte[][] ExpectedFixedPayloads =
+    [
+        [0xDE, 0xAD, 0xBE, 0xEF],
+        [0xCA, 0xFE, 0xBA, 0xBE]
+    ];
+
+    public static readonly TimeSpan[] ExpectedProcessingTimes =
+    [
+        TimeSpan.FromMilliseconds(125),
+        TimeSpan.FromMilliseconds(250)
+    ];
+
+    public static readonly YearMonthInterval[] ExpectedBillingCycles =
+    [
+        new(1, 2),
+        new(2, 3)
+    ];
+
+    public static readonly DayTimeInterval[] ExpectedRetryWindows =
+    [
+        new(1, 60_000),
+        new(2, 120_000)
+    ];
+
+    public static readonly MonthDayNanosecondInterval[] ExpectedMaintenanceWindows =
+    [
+        new(1, 2, 3_000),
+        new(4, 5, 6_000)
+    ];
+
+    public static readonly string[] ExpectedUnionChildFieldNames =
+    [
+        "status",
+        "code"
+    ];
+
+    public static readonly ArrowTypeId[] ExpectedUnionChildTypeIds =
+    [
+        ArrowTypeId.String,
+        ArrowTypeId.Int32
+    ];
+
+    public static readonly int[] ExpectedUnionTypeIds = [7, 11];
+    public static readonly byte[] ExpectedUnionRowTypeIds = [(byte)ExpectedUnionTypeIds[0], (byte)ExpectedUnionTypeIds[1]];
+    public static readonly string[] ExpectedUnionStatusValues = ["ok"];
+    public static readonly int[] ExpectedUnionCodeValues = [42];
+
+    public const int ExpectedFixedPayloadByteWidth = 4;
+    public const TimeUnit ExpectedDurationUnit = TimeUnit.Millisecond;
+
+    public static int ExpectedRowCount => ExpectedFixedPayloads.Length;
+
+    public static RecordBatch CreateRecordBatch()
+    {
+        var schema = new Schema.Builder()
+            .Field(new Field(FixedPayloadFieldName, new FixedSizeBinaryType(ExpectedFixedPayloadByteWidth), nullable: false, EmptyMetadata))
+            .Field(new Field(ProcessingTimeFieldName, DurationType.Millisecond, nullable: false, EmptyMetadata))
+            .Field(new Field(BillingCycleFieldName, new IntervalType(IntervalUnit.YearMonth), nullable: false, EmptyMetadata))
+            .Field(new Field(RetryWindowFieldName, new IntervalType(IntervalUnit.DayTime), nullable: false, EmptyMetadata))
+            .Field(new Field(MaintenanceWindowFieldName, new IntervalType(IntervalUnit.MonthDayNanosecond), nullable: false, EmptyMetadata))
+            .Field(
+                new Field(
+                    ResultFieldName,
+                    new UnionType(
+                        new[]
+                        {
+                            new Field(ExpectedUnionChildFieldNames[0], new StringType(), nullable: false, EmptyMetadata),
+                            new Field(ExpectedUnionChildFieldNames[1], new Int32Type(), nullable: false, EmptyMetadata)
+                        },
+                        ExpectedUnionTypeIds,
+                        UnionMode.Dense),
+                    nullable: false,
+                    EmptyMetadata))
+            .Build();
+
+        var fixedPayloadBufferBuilder = new ArrowBuffer.Builder<byte>(ExpectedFixedPayloads.Length * ExpectedFixedPayloadByteWidth);
+        foreach (var value in ExpectedFixedPayloads)
+        {
+            fixedPayloadBufferBuilder.Append((ReadOnlySpan<byte>)value);
+        }
+
+        var fixedPayloadArray = new FixedSizeBinaryArray(
+            new ArrayData(
+                new FixedSizeBinaryType(ExpectedFixedPayloadByteWidth),
+                ExpectedRowCount,
+                0,
+                0,
+                [ArrowBuffer.Empty, fixedPayloadBufferBuilder.Build(MemoryAllocator.Default.Value)],
+                []));
+
+        var processingTimeBuilder = new DurationArray.Builder(DurationType.Millisecond);
+        foreach (var value in ExpectedProcessingTimes)
+        {
+            processingTimeBuilder.Append(value);
+        }
+
+        var billingCycleBuilder = new YearMonthIntervalArray.Builder();
+        foreach (var value in ExpectedBillingCycles)
+        {
+            billingCycleBuilder.Append(value);
+        }
+
+        var retryWindowBuilder = new DayTimeIntervalArray.Builder();
+        foreach (var value in ExpectedRetryWindows)
+        {
+            retryWindowBuilder.Append(value);
+        }
+
+        var maintenanceWindowBuilder = new MonthDayNanosecondIntervalArray.Builder();
+        foreach (var value in ExpectedMaintenanceWindows)
+        {
+            maintenanceWindowBuilder.Append(value);
+        }
+
+        var unionStatusBuilder = new StringArray.Builder();
+        foreach (var value in ExpectedUnionStatusValues)
+        {
+            unionStatusBuilder.Append(value);
+        }
+
+        var unionCodeBuilder = new Int32Array.Builder();
+        foreach (var value in ExpectedUnionCodeValues)
+        {
+            unionCodeBuilder.Append(value);
+        }
+
+        var unionTypeIdBuilder = new ArrowBuffer.Builder<byte>(ExpectedUnionRowTypeIds.Length);
+        unionTypeIdBuilder.Append(ExpectedUnionRowTypeIds);
+        var unionOffsetBuilder = new ArrowBuffer.Builder<int>(ExpectedRowCount);
+        unionOffsetBuilder.Append(0);
+        unionOffsetBuilder.Append(0);
+
+        var unionArray = new DenseUnionArray(
+            new UnionType(
+                new[]
+                {
+                    new Field(ExpectedUnionChildFieldNames[0], new StringType(), nullable: false, EmptyMetadata),
+                    new Field(ExpectedUnionChildFieldNames[1], new Int32Type(), nullable: false, EmptyMetadata)
+                },
+                ExpectedUnionTypeIds,
+                UnionMode.Dense),
+            ExpectedRowCount,
+            new IArrowArray[]
+            {
+                unionStatusBuilder.Build(),
+                unionCodeBuilder.Build()
+            },
+            unionTypeIdBuilder.Build(MemoryAllocator.Default.Value),
+            unionOffsetBuilder.Build(MemoryAllocator.Default.Value),
+            0,
+            0);
+
+        return new RecordBatch(
+            schema,
+            new IArrowArray[]
+            {
+                fixedPayloadArray,
+                processingTimeBuilder.Build(MemoryAllocator.Default.Value),
+                billingCycleBuilder.Build(MemoryAllocator.Default.Value),
+                retryWindowBuilder.Build(MemoryAllocator.Default.Value),
+                maintenanceWindowBuilder.Build(MemoryAllocator.Default.Value),
+                unionArray
+            },
+            ExpectedRowCount);
+    }
+}
+
+internal static class AdvancedExtendedStructFixture
+{
+    public static readonly KeyValuePair<string, string>[] EmptyMetadata = [];
+
+    public const string StructFieldName = "advanced_details";
+    public const string FixedPayloadFieldName = "fixed_payload";
+    public const string ProcessingTimeFieldName = "processing_time";
+    public const string BillingCycleFieldName = "billing_cycle";
+    public const string RetryWindowFieldName = "retry_window";
+    public const string MaintenanceWindowFieldName = "maintenance_window";
+
+    public static readonly string[] ExpectedChildFieldNames =
+    [
+        FixedPayloadFieldName,
+        ProcessingTimeFieldName,
+        BillingCycleFieldName,
+        RetryWindowFieldName,
+        MaintenanceWindowFieldName
+    ];
+
+    public static readonly ArrowTypeId[] ExpectedChildTypeIds =
+    [
+        ArrowTypeId.FixedSizedBinary,
+        ArrowTypeId.Duration,
+        ArrowTypeId.Interval,
+        ArrowTypeId.Interval,
+        ArrowTypeId.Interval
+    ];
+
+    public static int ExpectedRowCount => AdvancedExtendedFixture.ExpectedRowCount;
+
+    public static RecordBatch CreateRecordBatch()
+    {
+        var structFields = new Field[]
+        {
+            new(FixedPayloadFieldName, new FixedSizeBinaryType(AdvancedExtendedFixture.ExpectedFixedPayloadByteWidth), nullable: false, EmptyMetadata),
+            new(ProcessingTimeFieldName, DurationType.Millisecond, nullable: false, EmptyMetadata),
+            new(BillingCycleFieldName, new IntervalType(IntervalUnit.YearMonth), nullable: false, EmptyMetadata),
+            new(RetryWindowFieldName, new IntervalType(IntervalUnit.DayTime), nullable: false, EmptyMetadata),
+            new(MaintenanceWindowFieldName, new IntervalType(IntervalUnit.MonthDayNanosecond), nullable: false, EmptyMetadata)
+        };
+
+        var schema = new Schema.Builder()
+            .Field(new Field(StructFieldName, new StructType(structFields), nullable: false, EmptyMetadata))
+            .Build();
+
+        var fixedPayloadBufferBuilder = new ArrowBuffer.Builder<byte>(AdvancedExtendedFixture.ExpectedFixedPayloads.Length * AdvancedExtendedFixture.ExpectedFixedPayloadByteWidth);
+        foreach (var value in AdvancedExtendedFixture.ExpectedFixedPayloads)
+        {
+            fixedPayloadBufferBuilder.Append((ReadOnlySpan<byte>)value);
+        }
+
+        var fixedPayloadArray = new FixedSizeBinaryArray(
+            new ArrayData(
+                new FixedSizeBinaryType(AdvancedExtendedFixture.ExpectedFixedPayloadByteWidth),
+                ExpectedRowCount,
+                0,
+                0,
+                [ArrowBuffer.Empty, fixedPayloadBufferBuilder.Build(MemoryAllocator.Default.Value)],
+                []));
+
+        var processingTimeBuilder = new DurationArray.Builder(DurationType.Millisecond);
+        foreach (var value in AdvancedExtendedFixture.ExpectedProcessingTimes)
+        {
+            processingTimeBuilder.Append(value);
+        }
+
+        var billingCycleBuilder = new YearMonthIntervalArray.Builder();
+        foreach (var value in AdvancedExtendedFixture.ExpectedBillingCycles)
+        {
+            billingCycleBuilder.Append(value);
+        }
+
+        var retryWindowBuilder = new DayTimeIntervalArray.Builder();
+        foreach (var value in AdvancedExtendedFixture.ExpectedRetryWindows)
+        {
+            retryWindowBuilder.Append(value);
+        }
+
+        var maintenanceWindowBuilder = new MonthDayNanosecondIntervalArray.Builder();
+        foreach (var value in AdvancedExtendedFixture.ExpectedMaintenanceWindows)
+        {
+            maintenanceWindowBuilder.Append(value);
+        }
+
+        var columns = new IArrowArray[]
+        {
+            new StructArray(
+                new StructType(structFields),
+                ExpectedRowCount,
+                new IArrowArray[]
+                {
+                    fixedPayloadArray,
+                    processingTimeBuilder.Build(MemoryAllocator.Default.Value),
+                    billingCycleBuilder.Build(MemoryAllocator.Default.Value),
+                    retryWindowBuilder.Build(MemoryAllocator.Default.Value),
+                    maintenanceWindowBuilder.Build(MemoryAllocator.Default.Value)
                 },
                 ArrowBuffer.Empty,
                 0,
