@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace DoraNode;
@@ -49,6 +50,24 @@ public sealed class DoraEvent : IDisposable
     /// Gets the byte payload for input events, materializing it on first access.
     /// </summary>
     public byte[]? Data => GetData();
+
+    /// <summary>
+    /// Attempts to parse the event's serialized OpenTelemetry context.
+    /// </summary>
+    public bool TryGetActivityContext(out ActivityContext context)
+    {
+        return DoraTelemetry.TryParseContext(OpenTelemetryContext, out context);
+    }
+
+    /// <summary>
+    /// Starts an activity for processing this event.
+    /// </summary>
+    public Activity? StartActivity(string? name = null, ActivityKind kind = ActivityKind.Consumer)
+    {
+        var activity = DoraTelemetry.StartActivityFromContext(OpenTelemetryContext, name, kind);
+        DoraTelemetry.ApplyInputTags(activity, this);
+        return activity;
+    }
 
     internal DoraEvent(IntPtr eventPtr)
     {

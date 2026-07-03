@@ -328,6 +328,42 @@ public static class SendOutputExtensions
     }
 
     /// <summary>
+    /// Sends a byte payload with an explicitly selected activity context.
+    /// </summary>
+    public static DoraResult Send(this SendOutput sendOutput, string outputId, byte[] data, System.Diagnostics.ActivityContext? context)
+    {
+        ArgumentNullException.ThrowIfNull(sendOutput);
+        return SendOutputBridge.Send(sendOutput, outputId, data, context);
+    }
+
+    /// <summary>
+    /// Sends a byte payload from a memory buffer with an explicitly selected activity context.
+    /// </summary>
+    public static DoraResult Send(this SendOutput sendOutput, string outputId, ReadOnlyMemory<byte> data, System.Diagnostics.ActivityContext? context)
+    {
+        ArgumentNullException.ThrowIfNull(sendOutput);
+        return SendOutputBridge.Send(sendOutput, outputId, data.ToArray(), context);
+    }
+
+    /// <summary>
+    /// Sends a UTF-8 string payload with an explicitly selected activity context.
+    /// </summary>
+    public static DoraResult Send(this SendOutput sendOutput, string outputId, string data, System.Diagnostics.ActivityContext? context)
+    {
+        ArgumentNullException.ThrowIfNull(sendOutput);
+        return SendOutputBridge.Send(sendOutput, outputId, System.Text.Encoding.UTF8.GetBytes(data), context);
+    }
+
+    /// <summary>
+    /// Sends a byte payload and injects the current activity context when present.
+    /// </summary>
+    public static DoraResult SendWithCurrentActivity(this SendOutput sendOutput, string outputId, byte[] data)
+    {
+        ArgumentNullException.ThrowIfNull(sendOutput);
+        return SendOutputBridge.SendWithCurrentActivity(sendOutput, outputId, data);
+    }
+
+    /// <summary>
     /// Serializes and sends a record batch through the low-level send-output delegate.
     /// </summary>
     /// <param name="sendOutput">The low-level output delegate provided by the runtime.</param>

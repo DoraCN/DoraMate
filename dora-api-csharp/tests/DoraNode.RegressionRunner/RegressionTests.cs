@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using Apache.Arrow;
 using CSharpAdvancedArrowNodeDataflow;
@@ -10,6 +11,89 @@ namespace DoraNodeRegressionRunner;
 
 public sealed class RegressionTests
 {
+    [Fact]
+    public void TelemetryParsesAndSerializesDoraTraceContext()
+    {
+        const string traceParent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+        const string traceState = "vendor=value";
+
+        TestAssert.True(
+            DoraTelemetry.TryParseContext($"traceparent:{traceParent};tracestate:{traceState};", out var context),
+            "context should parse");
+        TestAssert.Equal("4bf92f3577b34da6a3ce929d0e0e4736", context.TraceId.ToString(), "trace id");
+        TestAssert.Equal("00f067aa0ba902b7", context.SpanId.ToString(), "span id");
+        TestAssert.Equal(traceState, context.TraceState!, "trace state");
+
+        var serialized = DoraTelemetry.SerializeContext(context);
+        TestAssert.Contains(serialized, $"traceparent:{traceParent};", "serialized traceparent");
+        TestAssert.Contains(serialized, $"tracestate:{traceState};", "serialized tracestate");
+    }
+
+    [Fact]
+    public void TelemetryStartsChildActivityFromDoraTraceContext()
+    {
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "DoraMate.DoraNode",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        const string context = "traceparent:00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01;";
+        using var activity = DoraTelemetry.StartActivityFromContext(context, "test-node");
+
+        TestAssert.NotNull(activity, "activity");
+        TestAssert.Equal("4bf92f3577b34da6a3ce929d0e0e4736", activity!.TraceId.ToString(), "trace id");
+        TestAssert.Equal("00f067aa0ba902b7", activity.ParentSpanId.ToString(), "parent span id");
+    }
+
+    [Fact]
+    public void TelemetryTreatsInvalidContextAsRootActivity()
+    {
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "DoraMate.DoraNode",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        TestAssert.False(DoraTelemetry.TryParseContext("traceparent:not-a-valid-context;", out _), "invalid context should not parse");
+        using var activity = DoraTelemetry.StartActivityFromContext("traceparent:not-a-valid-context;", "test-node-root");
+
+        TestAssert.NotNull(activity, "activity");
+        TestAssert.Equal(default(ActivitySpanId).ToString(), activity!.ParentSpanId.ToString(), "root parent span id");
+    }
+
+    [Fact]
+    public void TelemetrySerializesCurrentActivityWhenAutoInjectIsEnabled()
+    {
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "DoraMate.DoraNode",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        var originalAutoInject = DoraTelemetry.AutoInjectCurrentActivity;
+        try
+        {
+            DoraTelemetry.AutoInjectCurrentActivity = true;
+            using var activity = DoraTelemetry.ActivitySource.StartActivity("auto-inject-test");
+            var serialized = DoraTelemetry.SerializeCurrentActivityContext();
+
+            TestAssert.NotNull(activity, "activity");
+            TestAssert.NotNull(serialized, "serialized current activity");
+            TestAssert.Contains(serialized!, activity!.TraceId.ToString(), "serialized trace id");
+
+            DoraTelemetry.AutoInjectCurrentActivity = false;
+            TestAssert.True(DoraTelemetry.SerializeCurrentActivityContext() is null, "disabled auto inject");
+        }
+        finally
+        {
+            DoraTelemetry.AutoInjectCurrentActivity = originalAutoInject;
+        }
+    }
+
     [Fact]
     public void RoundtripSummaryMatchesStandaloneExampleOutput()
     {

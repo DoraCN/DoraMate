@@ -7,8 +7,9 @@ use dora_arrow_convert::{ArrowData, IntoArrow};
 pub use safer_ffi;
 
 use arrow::{
-    array::Array,
+    array::{Array, StructArray},
     ffi::{FFI_ArrowArray, FFI_ArrowSchema},
+    ipc::reader::StreamReader,
 };
 use core::slice;
 use safer_ffi::{
@@ -16,7 +17,7 @@ use safer_ffi::{
     closure::ArcDynFn1,
     derive_ReprC, ffi_export,
 };
-use std::{ops::Deref, path::Path};
+use std::{io::Cursor, ops::Deref, path::Path};
 
 #[derive_ReprC]
 #[ffi_export]
@@ -164,12 +165,30 @@ pub fn dora_read_input_id(input: &Input) -> char_p_boxed {
 pub fn dora_free_input_id(_input_id: char_p_boxed) {}
 
 #[ffi_export]
+pub fn dora_read_input_open_telemetry_context(input: &Input) -> char_p_boxed {
+    char_p::new(&*input.metadata.open_telemetry_context)
+}
+
+#[ffi_export]
+pub fn dora_free_input_open_telemetry_context(_context: char_p_boxed) {}
+
+#[ffi_export]
 pub fn dora_read_data(input: &mut Input) -> Option<safer_ffi::Vec<u8>> {
     let data_array = input.data_array.take()?;
     let data = unsafe { arrow::ffi::from_ffi(data_array, &input.schema).ok()? };
     let array = ArrowData(arrow::array::make_array(data));
     let bytes: &[u8] = TryFrom::try_from(&array).ok()?;
     Some(bytes.to_owned().into())
+}
+
+#[ffi_export]
+pub fn dora_input_has_bytes(input: &Input) -> bool {
+    input.data_array.is_some()
+}
+
+#[ffi_export]
+pub fn dora_input_has_arrow(input: &Input) -> bool {
+    input.data_array.is_some()
 }
 
 #[ffi_export]
@@ -182,6 +201,93 @@ pub unsafe fn dora_send_operator_output(
     data_ptr: *const u8,
     data_len: usize,
 ) -> DoraResult {
+    unsafe { send_operator_output_internal(send_output, id, data_ptr, data_len, "") }
+}
+
+#[ffi_export]
+pub unsafe fn dora_send_operator_output_with_metadata(
+    send_output: &SendOutput,
+    id: safer_ffi::char_p::char_p_ref<'_>,
+    data_ptr: *const u8,
+    data_len: usize,
+    open_telemetry_context: safer_ffi::char_p::char_p_ref<'_>,
+) -> DoraResult {
+    unsafe {
+        send_operator_output_internal(
+            send_output,
+            id,
+            data_ptr,
+            data_len,
+            open_telemetry_context.to_str(),
+        )
+    }
+}
+
+#[ffi_export]
+pub unsafe fn dora_send_operator_arrow_output(
+    send_output: &SendOutput,
+    id: safer_ffi::char_p::char_p_ref<'_>,
+    data_array: *mut std::ffi::c_void,
+    schema: *mut std::ffi::c_void,
+) -> DoraResult {
+    unsafe { send_operator_arrow_output_internal(send_output, id, data_array, schema, "") }
+}
+
+#[ffi_export]
+pub unsafe fn dora_send_operator_arrow_output_with_metadata(
+    send_output: &SendOutput,
+    id: safer_ffi::char_p::char_p_ref<'_>,
+    data_array: *mut std::ffi::c_void,
+    schema: *mut std::ffi::c_void,
+    open_telemetry_context: safer_ffi::char_p::char_p_ref<'_>,
+) -> DoraResult {
+    unsafe {
+        send_operator_arrow_output_internal(
+            send_output,
+            id,
+            data_array,
+            schema,
+            open_telemetry_context.to_str(),
+        )
+    }
+}
+
+#[ffi_export]
+pub unsafe fn dora_send_operator_arrow_ipc_output(
+    send_output: &SendOutput,
+    id: safer_ffi::char_p::char_p_ref<'_>,
+    data_ptr: *const u8,
+    data_len: usize,
+) -> DoraResult {
+    unsafe { send_operator_arrow_ipc_output_internal(send_output, id, data_ptr, data_len, "") }
+}
+
+#[ffi_export]
+pub unsafe fn dora_send_operator_arrow_ipc_output_with_metadata(
+    send_output: &SendOutput,
+    id: safer_ffi::char_p::char_p_ref<'_>,
+    data_ptr: *const u8,
+    data_len: usize,
+    open_telemetry_context: safer_ffi::char_p::char_p_ref<'_>,
+) -> DoraResult {
+    unsafe {
+        send_operator_arrow_ipc_output_internal(
+            send_output,
+            id,
+            data_ptr,
+            data_len,
+            open_telemetry_context.to_str(),
+        )
+    }
+}
+
+unsafe fn send_operator_output_internal(
+    send_output: &SendOutput,
+    id: safer_ffi::char_p::char_p_ref<'_>,
+    data_ptr: *const u8,
+    data_len: usize,
+    open_telemetry_context: &str,
+) -> DoraResult {
     let result = || {
         let data = unsafe { slice::from_raw_parts(data_ptr, data_len) };
         let arrow_data = data.to_owned().into_arrow();
@@ -192,7 +298,74 @@ pub unsafe fn dora_send_operator_output(
             data_array,
             schema,
             metadata: Metadata {
-                open_telemetry_context: String::new().into(), // TODO
+                open_telemetry_context: open_telemetry_context.to_owned().into(),
+            },
+        };
+        Result::<_, String>::Ok(output)
+    };
+    match result() {
+        Ok(output) => send_output.send_output.call(output),
+        Err(error) => DoraResult {
+            error: Some(Box::new(safer_ffi::String::from(error)).into()),
+        },
+    }
+}
+
+unsafe fn send_operator_arrow_output_internal(
+    send_output: &SendOutput,
+    id: safer_ffi::char_p::char_p_ref<'_>,
+    data_array: *mut std::ffi::c_void,
+    schema: *mut std::ffi::c_void,
+    open_telemetry_context: &str,
+) -> DoraResult {
+    let result = || {
+        if data_array.is_null() || schema.is_null() {
+            return Err("Received null Arrow array or schema pointer.".to_string());
+        }
+
+        let output = Output {
+            id: id.to_str().to_owned().into(),
+            data_array: unsafe { *Box::from_raw(data_array.cast::<FFI_ArrowArray>()) },
+            schema: unsafe { *Box::from_raw(schema.cast::<FFI_ArrowSchema>()) },
+            metadata: Metadata {
+                open_telemetry_context: open_telemetry_context.to_owned().into(),
+            },
+        };
+        Result::<_, String>::Ok(output)
+    };
+    match result() {
+        Ok(output) => send_output.send_output.call(output),
+        Err(error) => DoraResult {
+            error: Some(Box::new(safer_ffi::String::from(error)).into()),
+        },
+    }
+}
+
+unsafe fn send_operator_arrow_ipc_output_internal(
+    send_output: &SendOutput,
+    id: safer_ffi::char_p::char_p_ref<'_>,
+    data_ptr: *const u8,
+    data_len: usize,
+    open_telemetry_context: &str,
+) -> DoraResult {
+    let result = || {
+        let data = unsafe { slice::from_raw_parts(data_ptr, data_len) };
+        let mut reader = StreamReader::try_new(Cursor::new(data), None)
+            .map_err(|err| err.to_string())?;
+        let batch = reader
+            .next()
+            .transpose()
+            .map_err(|err| err.to_string())?
+            .ok_or_else(|| "Arrow IPC stream did not contain a record batch.".to_string())?;
+        let arrow_data = StructArray::from(batch);
+        let (data_array, schema) =
+            arrow::ffi::to_ffi(&arrow_data.to_data()).map_err(|err| err.to_string())?;
+        let output = Output {
+            id: id.to_str().to_owned().into(),
+            data_array,
+            schema,
+            metadata: Metadata {
+                open_telemetry_context: open_telemetry_context.to_owned().into(),
             },
         };
         Result::<_, String>::Ok(output)

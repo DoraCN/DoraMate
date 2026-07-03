@@ -1,0 +1,28 @@
+nodes:
+  - id: csharp-benchmark-producer
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build BenchmarkProducer.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/csharp-benchmark-dataflow/BenchmarkProducer/Release/net8.0/BenchmarkProducer
+    outputs:
+      - latency
+      - throughput
+
+  - id: csharp-benchmark-sink
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build BenchmarkSink.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/csharp-benchmark-dataflow/BenchmarkSink/Release/net8.0/BenchmarkSink
+    inputs:
+      latency:
+        source: csharp-benchmark-producer/latency
+        queue_size: 1000
+      throughput:
+        source: csharp-benchmark-producer/throughput
+        queue_size: 1000

@@ -14,6 +14,7 @@
 - `DoraNode` 同步 / 第一阶段异步事件读取
 - `DoraOperator` NativeAOT 导出与运行时桥接
 - Arrow `RecordBatch` 在 node / operator 间的读写
+- OpenTelemetry context 与 .NET `Activity` / `ActivitySource` 集成
 - contract / projector / assertion 等高阶 Arrow helper
 - smoke 与 regression 覆盖
 
@@ -121,6 +122,7 @@ while (true)
 - `NextAsync(...)`
 - `ReadAllEventsAsync(...)`
 - bytes / string / Arrow / `RecordBatch` 输出发送
+- `DoraEvent.StartActivity(...)` 与 OpenTelemetry context 传播
 
 ### 编写 Operator
 
@@ -162,6 +164,54 @@ public static class MyOperatorExports
 }
 ```
 
+### OpenTelemetry 追踪
+
+C# 绑定会把 Dora metadata 中的 `open_telemetry_context` 接入 .NET `Activity`。输入处理时可以直接启动 Activity：
+
+```csharp
+using var activity = ev.StartActivity("process-input");
+activity?.SetTag("dora.input.id", ev.Id);
+
+node.SendOutputOrThrow("output", payload);
+```
+
+`SendOutput(...)` / `SendArrow(...)` / `SendRecordBatch(...)` 默认会把 `Activity.Current` 注入下游 Dora metadata。Operator 侧同理：
+
+```csharp
+protected override OnEventResult OnInput(InputEvent ev, OperatorOutput output)
+{
+    using var activity = ev.Input.StartActivity("operator-input");
+    output.SendOrThrow("output", Transform(ev.Input.Data));
+    return OnEventResult.Continue();
+}
+```
+
+如需关闭自动注入：
+
+```csharp
+DoraTelemetry.AutoInjectCurrentActivity = false;
+```
+
+如需显式选择传播的 context：
+
+```csharp
+node.SendOutput("output", payload, activity.Context);
+output.Send("output", payload, activity.Context);
+```
+
+本地可运行示例：
+
+```powershell
+dora run ./samples/csharp-otel-dataflow/dataflow.yml
+```
+
+也可以跑端到端 smoke，自动校验 producer / transform / consumer 的 trace id 和 parent span 连续性：
+
+```powershell
+pwsh ./scripts/smoke-csharp-otel-dataflow.ps1
+pwsh ./scripts/smoke-csharp-otel-operator-dataflow.ps1
+```
+
 ## 推荐验证方式
 
 优先用统一 smoke，而不是只看 `dotnet build`。
@@ -189,6 +239,8 @@ pwsh ./scripts/smoke-doraoperator-arrow-roundtrip.ps1
 pwsh ./scripts/smoke-doraoperator-contract-arrow.ps1
 pwsh ./scripts/smoke-csharp-node-arrow.ps1
 pwsh ./scripts/smoke-csharp-node-operator-arrow.ps1
+pwsh ./scripts/smoke-csharp-otel-dataflow.ps1
+pwsh ./scripts/smoke-csharp-otel-operator-dataflow.ps1
 ```
 
 ## 错误码处理建议

@@ -32,7 +32,15 @@ $samples = @(
     "samples/csharp-operator-contract-arrow-dataflow/Sink.csproj",
     "samples/csharp-node-operator-arrow-dataflow/RecordBatchForwardOperator.csproj",
     "samples/csharp-node-operator-arrow-dataflow/Producer.csproj",
-    "samples/csharp-node-operator-arrow-dataflow/Consumer.csproj"
+    "samples/csharp-node-operator-arrow-dataflow/Consumer.csproj",
+    "samples/csharp-otel-dataflow/Producer.csproj",
+    "samples/csharp-otel-dataflow/Transform.csproj",
+    "samples/csharp-otel-dataflow/Consumer.csproj",
+    "samples/csharp-otel-operator-dataflow/Producer.csproj",
+    "samples/csharp-otel-operator-dataflow/OtelOperator.csproj",
+    "samples/csharp-otel-operator-dataflow/Consumer.csproj",
+    "samples/csharp-benchmark-dataflow/BenchmarkProducer.csproj",
+    "samples/csharp-benchmark-dataflow/BenchmarkSink.csproj"
 )
 
 Push-Location $repoRoot

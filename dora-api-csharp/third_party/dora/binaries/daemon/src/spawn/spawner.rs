@@ -254,16 +254,7 @@ impl Spawner {
                         ]);
                         Some(cmd)
                     } else {
-                        let dora_path = which::which("dora").wrap_err(
-                            "failed to find the `dora` binary in PATH.\n  \
-                            \n  \
-                            Hint: install it with:\n    \
-                            cargo install dora-cli\n  \
-                            \n  \
-                            Or if you built from source, add the build output to your PATH:\n    \
-                            export PATH=\"$PWD/target/debug:$PATH\"",
-                        )?;
-                        let mut cmd = Command::new(dora_path);
+                        let mut cmd = Command::new(current_exe);
                         cmd = cmd.arg("runtime");
                         Some(cmd)
                     }

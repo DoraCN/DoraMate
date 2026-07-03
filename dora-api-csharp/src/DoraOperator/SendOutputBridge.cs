@@ -39,7 +39,33 @@ internal static class SendOutputBridge
         return dispatcher.SendRecordBatch(outputId, ipcBytes);
     }
 
+    internal static DoraResult SendWithCurrentActivity(SendOutput sendOutput, string outputId, byte[] data)
+    {
+        if (sendOutput.Target is not SendOutputDispatcher dispatcher)
+        {
+            return sendOutput(outputId, data);
+        }
+
+        return dispatcher.SendBytesWithCurrentActivity(outputId, data);
+    }
+
+    internal static DoraResult Send(SendOutput sendOutput, string outputId, byte[] data, System.Diagnostics.ActivityContext? context)
+    {
+        if (sendOutput.Target is not SendOutputDispatcher dispatcher)
+        {
+            return sendOutput(outputId, data);
+        }
+
+        var openTelemetryContext = context.HasValue ? DoraTelemetry.SerializeContext(context.Value) : null;
+        return dispatcher.SendBytes(outputId, data, openTelemetryContext);
+    }
+
     private static DoraResult SendBytes(nint nativeSendOutput, string outputId, byte[] data)
+    {
+        return SendBytes(nativeSendOutput, outputId, data, DoraTelemetry.SerializeCurrentActivityContext());
+    }
+
+    private static DoraResult SendBytes(nint nativeSendOutput, string outputId, byte[] data, string? openTelemetryContext)
     {
         NativeMethods.EnsureLoaded();
 
@@ -55,11 +81,7 @@ internal static class SendOutputBridge
 
         data ??= Array.Empty<byte>();
         var outputIdUtf8 = Encoding.UTF8.GetBytes(outputId + "\0");
-        var nativeResult = NativeMethods.SendOperatorOutput(
-            (IntPtr)nativeSendOutput,
-            outputIdUtf8,
-            data,
-            (nuint)data.Length);
+        var nativeResult = SendOperatorOutput(nativeSendOutput, outputIdUtf8, data, openTelemetryContext);
 
         try
         {
@@ -73,6 +95,41 @@ internal static class SendOutputBridge
         finally
         {
             TryFreeResult(nativeResult);
+        }
+    }
+
+    private static NativeTypes.NativeDoraResult SendOperatorOutput(
+        nint nativeSendOutput,
+        byte[] outputIdUtf8,
+        byte[] data,
+        string? openTelemetryContext)
+    {
+        if (string.IsNullOrEmpty(openTelemetryContext))
+        {
+            return NativeMethods.SendOperatorOutput(
+                (IntPtr)nativeSendOutput,
+                outputIdUtf8,
+                data,
+                (nuint)data.Length);
+        }
+
+        var openTelemetryContextUtf8 = Encoding.UTF8.GetBytes(openTelemetryContext + "\0");
+        try
+        {
+            return NativeMethods.SendOperatorOutputWithMetadata(
+                (IntPtr)nativeSendOutput,
+                outputIdUtf8,
+                data,
+                (nuint)data.Length,
+                openTelemetryContextUtf8);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return NativeMethods.SendOperatorOutput(
+                (IntPtr)nativeSendOutput,
+                outputIdUtf8,
+                data,
+                (nuint)data.Length);
         }
     }
 
@@ -107,11 +164,12 @@ internal static class SendOutputBridge
         }
 
         var outputIdUtf8 = Encoding.UTF8.GetBytes(outputId + "\0");
-        var nativeResult = NativeMethods.SendOperatorArrowOutput(
-            (IntPtr)nativeSendOutput,
+        var nativeResult = SendOperatorArrowOutput(
+            nativeSendOutput,
             outputIdUtf8,
             (IntPtr)arrayHandle,
-            (IntPtr)schemaHandle);
+            (IntPtr)schemaHandle,
+            DoraTelemetry.SerializeCurrentActivityContext());
 
         try
         {
@@ -144,11 +202,11 @@ internal static class SendOutputBridge
 
         ipcBytes ??= Array.Empty<byte>();
         var outputIdUtf8 = Encoding.UTF8.GetBytes(outputId + "\0");
-        var nativeResult = NativeMethods.SendOperatorArrowIpcOutput(
-            (IntPtr)nativeSendOutput,
+        var nativeResult = SendOperatorArrowIpcOutput(
+            nativeSendOutput,
             outputIdUtf8,
             ipcBytes,
-            (nuint)ipcBytes.Length);
+            DoraTelemetry.SerializeCurrentActivityContext());
 
         try
         {
@@ -177,6 +235,77 @@ internal static class SendOutputBridge
         }
     }
 
+    private static NativeTypes.NativeDoraResult SendOperatorArrowOutput(
+        nint nativeSendOutput,
+        byte[] outputIdUtf8,
+        IntPtr array,
+        IntPtr schema,
+        string? openTelemetryContext)
+    {
+        if (string.IsNullOrEmpty(openTelemetryContext))
+        {
+            return NativeMethods.SendOperatorArrowOutput(
+                (IntPtr)nativeSendOutput,
+                outputIdUtf8,
+                array,
+                schema);
+        }
+
+        var openTelemetryContextUtf8 = Encoding.UTF8.GetBytes(openTelemetryContext + "\0");
+        try
+        {
+            return NativeMethods.SendOperatorArrowOutputWithMetadata(
+                (IntPtr)nativeSendOutput,
+                outputIdUtf8,
+                array,
+                schema,
+                openTelemetryContextUtf8);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return NativeMethods.SendOperatorArrowOutput(
+                (IntPtr)nativeSendOutput,
+                outputIdUtf8,
+                array,
+                schema);
+        }
+    }
+
+    private static NativeTypes.NativeDoraResult SendOperatorArrowIpcOutput(
+        nint nativeSendOutput,
+        byte[] outputIdUtf8,
+        byte[] ipcBytes,
+        string? openTelemetryContext)
+    {
+        if (string.IsNullOrEmpty(openTelemetryContext))
+        {
+            return NativeMethods.SendOperatorArrowIpcOutput(
+                (IntPtr)nativeSendOutput,
+                outputIdUtf8,
+                ipcBytes,
+                (nuint)ipcBytes.Length);
+        }
+
+        var openTelemetryContextUtf8 = Encoding.UTF8.GetBytes(openTelemetryContext + "\0");
+        try
+        {
+            return NativeMethods.SendOperatorArrowIpcOutputWithMetadata(
+                (IntPtr)nativeSendOutput,
+                outputIdUtf8,
+                ipcBytes,
+                (nuint)ipcBytes.Length,
+                openTelemetryContextUtf8);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return NativeMethods.SendOperatorArrowIpcOutput(
+                (IntPtr)nativeSendOutput,
+                outputIdUtf8,
+                ipcBytes,
+                (nuint)ipcBytes.Length);
+        }
+    }
+
     private sealed class SendOutputDispatcher
     {
         private readonly nint _nativeSendOutput;
@@ -189,6 +318,19 @@ internal static class SendOutputBridge
         public DoraResult SendBytes(string outputId, byte[] data)
         {
             return SendOutputBridge.SendBytes(_nativeSendOutput, outputId, data);
+        }
+
+        public DoraResult SendBytes(string outputId, byte[] data, string? openTelemetryContext)
+        {
+            return SendOutputBridge.SendBytes(_nativeSendOutput, outputId, data, openTelemetryContext);
+        }
+
+        public DoraResult SendBytesWithCurrentActivity(string outputId, byte[] data)
+        {
+            var openTelemetryContext = System.Diagnostics.Activity.Current is null
+                ? null
+                : DoraTelemetry.SerializeContext(System.Diagnostics.Activity.Current.Context);
+            return SendOutputBridge.SendBytes(_nativeSendOutput, outputId, data, openTelemetryContext);
         }
 
         public DoraResult SendArrow(string outputId, ArrowPayload payload)

@@ -28,6 +28,24 @@ public sealed class OperatorOutput
     }
 
     /// <summary>
+    /// Sends a raw byte payload with an explicitly selected activity context.
+    /// </summary>
+    public DoraResult Send(string outputId, byte[] data, System.Diagnostics.ActivityContext? context)
+    {
+        data ??= System.Array.Empty<byte>();
+        return _sendOutput.Send(outputId, data, context);
+    }
+
+    /// <summary>
+    /// Sends a raw byte payload and injects the current activity context when present.
+    /// </summary>
+    public DoraResult SendWithCurrentActivity(string outputId, byte[] data)
+    {
+        data ??= System.Array.Empty<byte>();
+        return _sendOutput.SendWithCurrentActivity(outputId, data);
+    }
+
+    /// <summary>
     /// Sends a raw byte payload from a memory buffer to the specified operator output.
     /// </summary>
     public DoraResult Send(string outputId, ReadOnlyMemory<byte> data)
@@ -41,6 +59,14 @@ public sealed class OperatorOutput
     public DoraResult Send(string outputId, string data)
     {
         return _sendOutput.Send(outputId, data);
+    }
+
+    /// <summary>
+    /// Sends a UTF-8 string payload with an explicitly selected activity context.
+    /// </summary>
+    public DoraResult Send(string outputId, string data, System.Diagnostics.ActivityContext? context)
+    {
+        return _sendOutput.Send(outputId, data, context);
     }
 
     /// <summary>

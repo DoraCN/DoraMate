@@ -1,0 +1,39 @@
+nodes:
+  - id: producer
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build Producer.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/csharp-otel-operator-dataflow/Producer/Release/net8.0/Producer
+    inputs:
+      tick: dora/timer/millis/1000
+    outputs:
+      - data
+
+  - id: runtime-node
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    operators:
+      - id: csharp-otel-operator
+        build: |
+          dotnet publish OtelOperator.csproj -c Release -p:NuGetAudit=false
+        shared-library: ../../artifacts/samples/csharp-otel-operator-dataflow/OtelOperator/Release/net8.0/native/OtelOperator
+        inputs:
+          input: producer/data
+        outputs:
+          - out
+
+  - id: consumer
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build Consumer.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/csharp-otel-operator-dataflow/Consumer/Release/net8.0/Consumer
+    inputs:
+      input: runtime-node/csharp-otel-operator/out

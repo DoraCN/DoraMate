@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 
 namespace DoraOperator;
@@ -100,6 +101,24 @@ public sealed class Input
     /// Gets the serialized OpenTelemetry context attached to the input, when present.
     /// </summary>
     public string? OpenTelemetryContext { get; }
+
+    /// <summary>
+    /// Attempts to parse the input's serialized OpenTelemetry context.
+    /// </summary>
+    public bool TryGetActivityContext(out ActivityContext context)
+    {
+        return DoraTelemetry.TryParseContext(OpenTelemetryContext, out context);
+    }
+
+    /// <summary>
+    /// Starts an activity for processing this input.
+    /// </summary>
+    public Activity? StartActivity(string? name = null, ActivityKind kind = ActivityKind.Consumer)
+    {
+        var activity = DoraTelemetry.StartActivityFromContext(OpenTelemetryContext, name, kind);
+        DoraTelemetry.ApplyInputTags(activity, this);
+        return activity;
+    }
 
     /// <summary>
     /// Materializes the input as a byte payload.

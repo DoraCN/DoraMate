@@ -1,0 +1,37 @@
+nodes:
+  - id: producer
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build Producer.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/csharp-otel-dataflow/Producer/Release/net8.0/Producer
+    inputs:
+      tick: dora/timer/millis/1000
+    outputs:
+      - data
+
+  - id: transform
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build Transform.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/csharp-otel-dataflow/Transform/Release/net8.0/Transform
+    inputs:
+      input: producer/data
+    outputs:
+      - out
+
+  - id: consumer
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_HOME: "../../.dotnet-cli"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    build: |
+      dotnet build Consumer.csproj -c Release -p:NuGetAudit=false
+    path: ../../artifacts/samples/csharp-otel-dataflow/Consumer/Release/net8.0/Consumer
+    inputs:
+      input: transform/out

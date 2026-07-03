@@ -271,6 +271,14 @@ internal static class NativeMethods
         byte[] data,
         nuint dataLen);
 
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "dora_send_operator_output_with_metadata")]
+    public static extern NativeTypes.NativeDoraResult SendOperatorOutputWithMetadata(
+        IntPtr sendOutput,
+        byte[] outputIdUtf8,
+        byte[] data,
+        nuint dataLen,
+        byte[] openTelemetryContextUtf8);
+
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "dora_send_operator_arrow_output")]
     public static extern NativeTypes.NativeDoraResult SendOperatorArrowOutput(
         IntPtr sendOutput,
@@ -278,10 +286,26 @@ internal static class NativeMethods
         IntPtr array,
         IntPtr schema);
 
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "dora_send_operator_arrow_output_with_metadata")]
+    public static extern NativeTypes.NativeDoraResult SendOperatorArrowOutputWithMetadata(
+        IntPtr sendOutput,
+        byte[] outputIdUtf8,
+        IntPtr array,
+        IntPtr schema,
+        byte[] openTelemetryContextUtf8);
+
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "dora_send_operator_arrow_ipc_output")]
     public static extern NativeTypes.NativeDoraResult SendOperatorArrowIpcOutput(
         IntPtr sendOutput,
         byte[] outputIdUtf8,
         byte[] data,
         nuint dataLen);
+
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "dora_send_operator_arrow_ipc_output_with_metadata")]
+    public static extern NativeTypes.NativeDoraResult SendOperatorArrowIpcOutputWithMetadata(
+        IntPtr sendOutput,
+        byte[] outputIdUtf8,
+        byte[] data,
+        nuint dataLen,
+        byte[] openTelemetryContextUtf8);
 }

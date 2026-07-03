@@ -6,6 +6,7 @@
 - C# operator 能跑
 - Arrow 数据面能跑
 - async node API 能跑
+- OpenTelemetry context 能传播
 
 ## 适用范围
 
@@ -15,6 +16,7 @@
 - 用 `DoraOperator` 编写 NativeAOT 共享库 Operator
 - 用 Arrow `RecordBatch` 在 node / operator 间传输结构化数据
 - 用 `NextAsync(...)` / `ReadAllEventsAsync(...)` 做第一阶段异步事件消费
+- 用 .NET `Activity` 参与 Dora OpenTelemetry context 传播
 
 如果你的目标只是“先确认绑定能跑”，优先直接运行仓库已有示例和 smoke，不要先手工新建项目。
 
@@ -130,6 +132,27 @@ dora run ./samples/csharp-async-node-dataflow/dataflow.yml
 - `ReadAllEventsAsync(...)`
 - 取消、流关闭、生命周期边界
 
+### E. OpenTelemetry 传播示例
+
+```powershell
+dora run ./samples/csharp-otel-dataflow/dataflow.yml
+```
+
+端到端自动校验：
+
+```powershell
+pwsh ./scripts/smoke-csharp-otel-dataflow.ps1
+pwsh ./scripts/smoke-csharp-otel-operator-dataflow.ps1
+```
+
+它用于确认：
+
+- `DoraEvent.StartActivity(...)`
+- `Input.StartActivity(...)`
+- `Activity.Current` 自动注入 output metadata
+- `producer -> transform/operator -> consumer` trace id 连续
+- transform/operator 的 parent span 等于 producer span，consumer 的 parent span 等于中间 span
+
 ## 自己写一个最小 C# node
 
 ### 1. 新建控制台项目
@@ -177,6 +200,29 @@ while (true)
         break;
     }
 }
+```
+
+## OpenTelemetry 最短路径
+
+输入事件可以直接基于 Dora 上游 metadata 创建 .NET Activity：
+
+```csharp
+using var activity = ev.StartActivity("process-input");
+node.SendOutputOrThrow("output", payload);
+```
+
+发送 output 时，`DoraTelemetry.AutoInjectCurrentActivity` 默认开启，所以 `Activity.Current` 会自动写入 Dora metadata。下游 C# / Rust / Python 节点可继续接上同一条 trace。
+
+显式传 context：
+
+```csharp
+node.SendOutput("output", payload, activity.Context);
+```
+
+关闭自动注入：
+
+```csharp
+DoraTelemetry.AutoInjectCurrentActivity = false;
 ```
 
 ## 自己写一个最小 C# operator
@@ -229,7 +275,8 @@ public static class MyOperatorExports
 4. `samples/csharp-operator-dataflow/`
 5. `samples/csharp-node-operator-arrow-dataflow/`
 6. `samples/csharp-async-node-dataflow/`
-7. `scripts/smoke-csharp-bindings.ps1`
+7. `samples/csharp-otel-dataflow/`
+8. `scripts/smoke-csharp-bindings.ps1`
 
 ## 常见不要这样做
 

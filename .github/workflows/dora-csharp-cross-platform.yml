@@ -56,6 +56,10 @@ jobs:
         working-directory: ./dora-api-csharp/third_party/dora
         run: cargo build -p dora-cli --release --locked
 
+      - name: Install vendored Python Dora runtime
+        working-directory: ./dora-api-csharp
+        run: ./scripts/install-python-dora-runtime.ps1
+
       - name: Build native C libraries
         working-directory: ./dora-api-csharp
         run: ./scripts/build-native.ps1 -Configuration Release
@@ -85,3 +89,19 @@ jobs:
       - name: Run minimal C# bytes smoke
         working-directory: ./dora-api-csharp/samples/csharp-operator-dataflow
         run: dora run ./dataflow.yml
+
+      - name: Run C# OTel node trace smoke
+        working-directory: ./dora-api-csharp
+        run: ./scripts/smoke-csharp-otel-dataflow.ps1 -SkipBuild -TimeoutSeconds 45
+
+      - name: Run C# OTel operator trace smoke
+        working-directory: ./dora-api-csharp
+        run: ./scripts/smoke-csharp-otel-operator-dataflow.ps1 -TimeoutSeconds 45
+
+      - name: Upload C# OTel smoke logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: csharp-otel-smoke-${{ matrix.rid }}
+          path: dora-api-csharp/artifacts/smoke/**
+          if-no-files-found: ignore

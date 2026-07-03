@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <SampleName>csharp-otel-operator-dataflow</SampleName>
+    <BaseOutputPath Condition="'$(BaseOutputPath)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\samples\$(SampleName)\$(MSBuildProjectName)\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(BaseIntermediateOutputPath)**;$(MSBuildThisFileDirectory)obj\**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

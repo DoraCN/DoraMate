@@ -155,6 +155,21 @@ dora_free_input_id (
     char * _input_id);
 
 /** <No documentation available> */
+void
+dora_free_input_open_telemetry_context (
+    char * _context);
+
+/** <No documentation available> */
+bool
+dora_input_has_arrow (
+    Input_t const * input);
+
+/** <No documentation available> */
+bool
+dora_input_has_bytes (
+    Input_t const * input);
+
+/** <No documentation available> */
 Vec_uint8_t
 dora_read_data (
     Input_t * input);
@@ -165,12 +180,60 @@ dora_read_input_id (
     Input_t const * input);
 
 /** <No documentation available> */
+char *
+dora_read_input_open_telemetry_context (
+    Input_t const * input);
+
+/** <No documentation available> */
+DoraResult_t
+dora_send_operator_arrow_ipc_output (
+    SendOutput_t const * send_output,
+    char const * id,
+    uint8_t const * data_ptr,
+    size_t data_len);
+
+/** <No documentation available> */
+DoraResult_t
+dora_send_operator_arrow_ipc_output_with_metadata (
+    SendOutput_t const * send_output,
+    char const * id,
+    uint8_t const * data_ptr,
+    size_t data_len,
+    char const * open_telemetry_context);
+
+/** <No documentation available> */
+DoraResult_t
+dora_send_operator_arrow_output (
+    SendOutput_t const * send_output,
+    char const * id,
+    void * data_array,
+    void * schema);
+
+/** <No documentation available> */
+DoraResult_t
+dora_send_operator_arrow_output_with_metadata (
+    SendOutput_t const * send_output,
+    char const * id,
+    void * data_array,
+    void * schema,
+    char const * open_telemetry_context);
+
+/** <No documentation available> */
 DoraResult_t
 dora_send_operator_output (
     SendOutput_t const * send_output,
     char const * id,
     uint8_t const * data_ptr,
     size_t data_len);
+
+/** <No documentation available> */
+DoraResult_t
+dora_send_operator_output_with_metadata (
+    SendOutput_t const * send_output,
+    char const * id,
+    uint8_t const * data_ptr,
+    size_t data_len,
+    char const * open_telemetry_context);
 
 
 #ifdef __cplusplus

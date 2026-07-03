@@ -20,3 +20,30 @@ void read_dora_input_id(void *dora_event, char **out_ptr, size_t *out_len);
 void read_dora_input_data(void *dora_event, char **out_ptr, size_t *out_len);
 unsigned long long read_dora_input_timestamp(void *dora_event);
 int dora_send_output(void *dora_context, char *id_ptr, size_t id_len, char *data_ptr, size_t data_len);
+int dora_send_output_with_metadata(
+    void *dora_context,
+    char *id_ptr,
+    size_t id_len,
+    char *data_ptr,
+    size_t data_len,
+    char *open_telemetry_context_ptr,
+    size_t open_telemetry_context_len);
+
+int dora_send_output_arrow(void *dora_context, char *id_ptr, size_t id_len, void *array, void *schema);
+int dora_send_output_arrow_with_metadata(
+    void *dora_context,
+    char *id_ptr,
+    size_t id_len,
+    void *array,
+    void *schema,
+    char *open_telemetry_context_ptr,
+    size_t open_telemetry_context_len);
+int dora_send_output_arrow_ipc(void *dora_context, char *id_ptr, size_t id_len, char *data_ptr, size_t data_len);
+int dora_send_output_arrow_ipc_with_metadata(
+    void *dora_context,
+    char *id_ptr,
+    size_t id_len,
+    char *data_ptr,
+    size_t data_len,
+    char *open_telemetry_context_ptr,
+    size_t open_telemetry_context_len);

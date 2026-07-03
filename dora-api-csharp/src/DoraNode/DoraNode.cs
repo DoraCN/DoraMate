@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Channels;
@@ -168,6 +169,30 @@ public sealed class DoraNode : IDisposable
     /// <returns><see langword="true"/> when the runtime accepted the payload; otherwise, <see langword="false"/>.</returns>
     public bool SendOutput(string outputId, byte[] data)
     {
+        return SendOutputCore(outputId, data, DoraTelemetry.SerializeCurrentActivityContext());
+    }
+
+    /// <summary>
+    /// Sends a raw byte payload with an explicitly selected activity context.
+    /// </summary>
+    public bool SendOutput(string outputId, byte[] data, ActivityContext? activityContext)
+    {
+        var openTelemetryContext = activityContext.HasValue
+            ? DoraTelemetry.SerializeContext(activityContext.Value)
+            : null;
+        return SendOutputCore(outputId, data, openTelemetryContext);
+    }
+
+    /// <summary>
+    /// Sends a raw byte payload and injects the current activity context when present.
+    /// </summary>
+    public bool SendOutputWithCurrentActivity(string outputId, byte[] data)
+    {
+        return SendOutputCore(outputId, data, Activity.Current is null ? null : DoraTelemetry.SerializeContext(Activity.Current.Context));
+    }
+
+    private bool SendOutputCore(string outputId, byte[] data, string? openTelemetryContext)
+    {
         ThrowIfDisposed();
 
         if (string.IsNullOrEmpty(outputId))
@@ -177,7 +202,9 @@ public sealed class DoraNode : IDisposable
 
         data ??= Array.Empty<byte>();
         var idBytes = Encoding.UTF8.GetBytes(outputId);
-        var result = NativeMethods.DoraSendOutput(_context, idBytes, (UIntPtr)idBytes.Length, data, (UIntPtr)data.Length);
+        var result = string.IsNullOrEmpty(openTelemetryContext)
+            ? NativeMethods.DoraSendOutput(_context, idBytes, (UIntPtr)idBytes.Length, data, (UIntPtr)data.Length)
+            : SendOutputWithMetadata(idBytes, data, openTelemetryContext);
         return result == 0;
     }
 
@@ -208,6 +235,14 @@ public sealed class DoraNode : IDisposable
     }
 
     /// <summary>
+    /// Sends a UTF-8 string payload with an explicitly selected activity context.
+    /// </summary>
+    public bool SendOutput(string outputId, string data, ActivityContext? activityContext)
+    {
+        return SendOutput(outputId, Encoding.UTF8.GetBytes(data), activityContext);
+    }
+
+    /// <summary>
     /// Sends string output data and throws a diagnostic-rich exception when the send fails.
     /// </summary>
     public void SendOutputOrThrow(string outputId, string data)
@@ -222,6 +257,22 @@ public sealed class DoraNode : IDisposable
     /// <param name="payload">The Arrow payload whose ownership transfers to the native runtime on success.</param>
     /// <returns><see langword="true"/> when the runtime accepted the payload; otherwise, <see langword="false"/>.</returns>
     public bool SendArrow(string outputId, ArrowPayload payload)
+    {
+        return SendArrowCore(outputId, payload, DoraTelemetry.SerializeCurrentActivityContext());
+    }
+
+    /// <summary>
+    /// Sends an Arrow payload with an explicitly selected activity context.
+    /// </summary>
+    public bool SendArrow(string outputId, ArrowPayload payload, ActivityContext? activityContext)
+    {
+        var openTelemetryContext = activityContext.HasValue
+            ? DoraTelemetry.SerializeContext(activityContext.Value)
+            : null;
+        return SendArrowCore(outputId, payload, openTelemetryContext);
+    }
+
+    private bool SendArrowCore(string outputId, ArrowPayload payload, string? openTelemetryContext)
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(payload);
@@ -248,12 +299,14 @@ public sealed class DoraNode : IDisposable
         }
 
         var idBytes = Encoding.UTF8.GetBytes(outputId);
-        var result = NativeMethods.DoraSendOutputArrow(
-            _context,
-            idBytes,
-            (UIntPtr)idBytes.Length,
-            (IntPtr)arrayHandle,
-            (IntPtr)schemaHandle);
+        var result = string.IsNullOrEmpty(openTelemetryContext)
+            ? NativeMethods.DoraSendOutputArrow(
+                _context,
+                idBytes,
+                (UIntPtr)idBytes.Length,
+                (IntPtr)arrayHandle,
+                (IntPtr)schemaHandle)
+            : SendArrowWithMetadata(idBytes, (IntPtr)arrayHandle, (IntPtr)schemaHandle, openTelemetryContext);
 
         return result == 0;
     }
@@ -285,6 +338,16 @@ public sealed class DoraNode : IDisposable
     }
 
     /// <summary>
+    /// Sends an Arrow array/schema pair with an explicitly selected activity context.
+    /// </summary>
+    public bool SendArrow(string outputId, ArrowArray array, ArrowSchema schema, ActivityContext? activityContext)
+    {
+        ArgumentNullException.ThrowIfNull(array);
+        ArgumentNullException.ThrowIfNull(schema);
+        return SendArrow(outputId, new ArrowPayload(array, schema), activityContext);
+    }
+
+    /// <summary>
     /// Sends an Arrow array/schema pair and throws a diagnostic-rich exception when the send fails.
     /// </summary>
     public void SendArrowOrThrow(string outputId, ArrowArray array, ArrowSchema schema)
@@ -305,12 +368,15 @@ public sealed class DoraNode : IDisposable
 
         ipcBytes ??= Array.Empty<byte>();
         var idBytes = Encoding.UTF8.GetBytes(outputId);
-        var result = NativeMethods.DoraSendOutputArrowIpc(
-            _context,
-            idBytes,
-            (UIntPtr)idBytes.Length,
-            ipcBytes,
-            (UIntPtr)ipcBytes.Length);
+        var openTelemetryContext = DoraTelemetry.SerializeCurrentActivityContext();
+        var result = string.IsNullOrEmpty(openTelemetryContext)
+            ? NativeMethods.DoraSendOutputArrowIpc(
+                _context,
+                idBytes,
+                (UIntPtr)idBytes.Length,
+                ipcBytes,
+                (UIntPtr)ipcBytes.Length)
+            : SendArrowIpcWithMetadata(idBytes, ipcBytes, openTelemetryContext);
 
         return result == 0;
     }
@@ -564,5 +630,70 @@ public sealed class DoraNode : IDisposable
             ExternalException or SEHException => DoraNodeErrorCode.InvalidNativeHandle,
             _ => DoraNodeErrorCode.Unknown,
         };
+    }
+
+    private int SendOutputWithMetadata(byte[] idBytes, byte[] data, string openTelemetryContext)
+    {
+        var contextBytes = Encoding.UTF8.GetBytes(openTelemetryContext);
+        try
+        {
+            return NativeMethods.DoraSendOutputWithMetadata(
+                _context,
+                idBytes,
+                (UIntPtr)idBytes.Length,
+                data,
+                (UIntPtr)data.Length,
+                contextBytes,
+                (UIntPtr)contextBytes.Length);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return NativeMethods.DoraSendOutput(_context, idBytes, (UIntPtr)idBytes.Length, data, (UIntPtr)data.Length);
+        }
+    }
+
+    private int SendArrowWithMetadata(byte[] idBytes, IntPtr array, IntPtr schema, string openTelemetryContext)
+    {
+        var contextBytes = Encoding.UTF8.GetBytes(openTelemetryContext);
+        try
+        {
+            return NativeMethods.DoraSendOutputArrowWithMetadata(
+                _context,
+                idBytes,
+                (UIntPtr)idBytes.Length,
+                array,
+                schema,
+                contextBytes,
+                (UIntPtr)contextBytes.Length);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return NativeMethods.DoraSendOutputArrow(_context, idBytes, (UIntPtr)idBytes.Length, array, schema);
+        }
+    }
+
+    private int SendArrowIpcWithMetadata(byte[] idBytes, byte[] ipcBytes, string openTelemetryContext)
+    {
+        var contextBytes = Encoding.UTF8.GetBytes(openTelemetryContext);
+        try
+        {
+            return NativeMethods.DoraSendOutputArrowIpcWithMetadata(
+                _context,
+                idBytes,
+                (UIntPtr)idBytes.Length,
+                ipcBytes,
+                (UIntPtr)ipcBytes.Length,
+                contextBytes,
+                (UIntPtr)contextBytes.Length);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return NativeMethods.DoraSendOutputArrowIpc(
+                _context,
+                idBytes,
+                (UIntPtr)idBytes.Length,
+                ipcBytes,
+                (UIntPtr)ipcBytes.Length);
+        }
     }
 }

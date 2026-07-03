@@ -275,9 +275,39 @@ internal static unsafe class NativeMethods
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "dora_send_output")]
     public static extern int DoraSendOutput(IntPtr context, byte[] idPtr, UIntPtr idLen, byte[] dataPtr, UIntPtr dataLen);
 
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "dora_send_output_with_metadata")]
+    public static extern int DoraSendOutputWithMetadata(
+        IntPtr context,
+        byte[] idPtr,
+        UIntPtr idLen,
+        byte[] dataPtr,
+        UIntPtr dataLen,
+        byte[] openTelemetryContextPtr,
+        UIntPtr openTelemetryContextLen);
+
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "dora_send_output_arrow")]
     public static extern int DoraSendOutputArrow(IntPtr context, byte[] idPtr, UIntPtr idLen, IntPtr array, IntPtr schema);
 
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "dora_send_output_arrow_with_metadata")]
+    public static extern int DoraSendOutputArrowWithMetadata(
+        IntPtr context,
+        byte[] idPtr,
+        UIntPtr idLen,
+        IntPtr array,
+        IntPtr schema,
+        byte[] openTelemetryContextPtr,
+        UIntPtr openTelemetryContextLen);
+
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "dora_send_output_arrow_ipc")]
     public static extern int DoraSendOutputArrowIpc(IntPtr context, byte[] idPtr, UIntPtr idLen, byte[] dataPtr, UIntPtr dataLen);
+
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "dora_send_output_arrow_ipc_with_metadata")]
+    public static extern int DoraSendOutputArrowIpcWithMetadata(
+        IntPtr context,
+        byte[] idPtr,
+        UIntPtr idLen,
+        byte[] dataPtr,
+        UIntPtr dataLen,
+        byte[] openTelemetryContextPtr,
+        UIntPtr openTelemetryContextLen);
 }
