@@ -32,11 +32,14 @@ if (Test-Path $distDir) {
 
 # 1. LocalAgent binary
 $laSource = Join-Path $RepoRoot "target\release\doramate-localagent.exe"
+if (-not (Test-Path $laSource)) {
+    $laSource = Join-Path $RepoRoot "doramate-localagent\target\release\doramate-localagent.exe"
+}
 if (Test-Path $laSource) {
     Copy-Item $laSource (Join-Path $distDir "bin\doramate-localagent.exe")
     Write-Host "  [OK] bin/doramate-localagent.exe"
 } else {
-    Write-Warning "LocalAgent release binary not found at $laSource. Build with: cargo build -p doramate-localagent --release"
+    Write-Warning "LocalAgent release binary not found. Build with: cargo build --manifest-path doramate-localagent\Cargo.toml --release"
 }
 
 # 2. Frontend WASM dist
@@ -72,8 +75,8 @@ if (Test-Path $exampleDir) {
 # 5. Start script
 @"
 @echo off
-title DoraMate v%VERSION%
-echo Starting DoraMate LocalAgent v%VERSION%...
+title DoraMate v$Version
+echo Starting DoraMate LocalAgent v$Version...
 echo.
 echo   Web UI: http://127.0.0.1:52100
 echo   API:    http://127.0.0.1:52100/api

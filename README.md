@@ -66,29 +66,24 @@ trunk serve --open
 
 在网页里选择“打开/导入 YAML”，加载：
 
-`doramate-examples/xydataflow.yml`
+`doramate-examples/test.yml`
 
-然后可在画布中查看与编辑节点布局、连线和参数，并通过前端触发运行。
+如果同目录下存在 `test.yml.layout.json`，前端会自动加载布局 sidecar。随后可在画布中查看与编辑节点布局、连线和参数，并通过前端触发运行。
 
 ## YAML 文件约定（非常重要）
 
-`doramate-examples` 中有两类 YAML：
+`doramate-examples` 中当前主要有两类文件：
 
-1. `xydataflow.yml`
+1. `test.yml` + `test.yml.layout.json`
    - 给 DoraMate 前端使用
-   - 包含 `__doramate__` 布局元数据
-   - 不适合直接 `dora start`
+   - `test.yml` 是标准 Dora YAML
+   - `test.yml.layout.json` 保存 DoraMate 画布布局
+   - 命令行运行推荐使用完整的 `dataflow.yml`
 2. `dataflow.yml`
    - Dora CLI 可直接运行的标准描述
    - 命令行运行应使用它
 
-如果你执行：
-
-```powershell
-dora start xydataflow.yml
-```
-
-会出现 `unknown field '__doramate__'`，这是预期行为。
+前端保存布局时会额外写入同名 `.layout.json` sidecar；命令行运行时只需要使用标准 Dora YAML。
 
 正确方式：
 
@@ -169,7 +164,7 @@ dora start dataflow.yml
 
 ### 2. `unknown field '__doramate__'`
 
-- 原因：把 `xydataflow.yml` 直接给了 Dora CLI
+- 原因：把包含 DoraMate 内嵌布局元数据的旧格式 YAML 直接给了 Dora CLI
 - 处理：改用 `dataflow.yml` 运行
 
 ### 3. `dora` 命令不可用

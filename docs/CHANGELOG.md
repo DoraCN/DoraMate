@@ -1,12 +1,25 @@
 # Changelog
 
-## [0.10.0] - 2026-06-23
+## [0.10.0] - 2026-07-06
 
 ### Added
 - **Advanced Arrow coverage for C# bindings**: DoraNode and DoraOperator now cover Union, FixedSizeBinary, Duration, and Interval types across schema validation, assertions/projectors, contract samples, and regression tests.
+- **Release package frontend hosting**: LocalAgent now serves the bundled `frontend/` directory from the release ZIP, with SPA fallback to `index.html`.
+- **DoraMate layout sidecar flow**: Example docs now use `test.yml` plus `test.yml.layout.json` instead of the removed `xydataflow.yml` file.
 
 ### Changed
-- **C# NuGet version bump**: `DoraMate.DoraNode` and `DoraMate.DoraOperator` are prepared for a new NuGet release at v0.10.0.
+- **Version bump**: All active release components are aligned to v0.10.0, including LocalAgent, Frontend, DoraNode, DoraOperator, and DoraMate.Templates.
+- **C# NuGet release posture**: `DoraMate.DoraNode`, `DoraMate.DoraOperator`, and `DoraMate.Templates` are source/version-ready for v0.10.0 packaging. Public nuget.org publication remains a separate publish step that requires `NUGET_API_KEY`; the last confirmed public SDK packages are v0.9.0.
+- **Release scripts**: `build-release.ps1`, `package-zip.ps1`, and `package-installer.nsi` now use the current LocalAgent output path and handle the current PowerShell/Trunk `NO_COLOR` environment behavior.
+
+### Fixed
+- **ZIP startup experience**: The ZIP package now includes `bin/doramate-localagent.exe` from the actual `doramate-localagent/target/release/` output and serves the Web UI at `http://127.0.0.1:52100`.
+- **Example build preservation**: Imported Dora YAML `build` commands are preserved by the frontend converter so LocalAgent-generated runtime YAML keeps C# and Rust build steps.
+
+### Validation
+- Local release gate passed on 2026-07-06: 20/20 rounds, 100% run/status/stop success, zero residual failures.
+- Release build passed with `pwsh ./scripts/build-release.ps1 -SkipTests`.
+- ZIP extraction smoke passed: `/api/health` returned `status=ok`, version `0.10.0`; `/` and the frontend JS asset returned HTTP 200 from the bundled LocalAgent.
 
 ## [0.9.0] - 2026-05-29
 

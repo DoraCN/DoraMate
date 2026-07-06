@@ -2,7 +2,7 @@
 ; Requires NSIS 3.0+ (https://nsis.sourceforge.io)
 
 !define PRODUCT_NAME "DoraMate"
-!define PRODUCT_VERSION "0.9.0"
+!define PRODUCT_VERSION "0.10.0"
 !define PRODUCT_PUBLISHER "DoraMate Contributors"
 !define PRODUCT_WEB_SITE "https://github.com/dora-rs/doramate"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\doramate-localagent.exe"
@@ -46,14 +46,16 @@ Section "MainSection" SEC01
     SetOverwrite ifnewer
 
     ; Binaries
-    File "..\target\release\doramate-localagent.exe"
+    File "..\doramate-localagent\target\release\doramate-localagent.exe"
     File "..\dora-api-csharp\third_party\dora\target\release\dora.exe"
 
     ; Frontend (WASM)
     CreateDirectory "$INSTDIR\frontend"
+    SetOutPath "$INSTDIR\frontend"
     File /r "..\doramate-frontend\dist\*"
 
     ; Examples
+    SetOutPath "$INSTDIR"
     CreateDirectory "$INSTDIR\examples"
     File "..\doramate-examples\*.yml"
     File /nonfatal "..\doramate-examples\*.layout.json"

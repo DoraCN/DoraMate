@@ -12,12 +12,14 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde_yaml::Value;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::{SocketAddr, TcpStream};
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::process::Command;
 use tokio::sync::broadcast;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::{ServeDir, ServeFile};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
@@ -218,7 +220,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // 构建路由
-    let app = Router::new()
+    let api_routes = Router::new()
         .route("/api/health", get(health_check))
         .route("/api/diagnose", get(diagnose_handler))
         .route("/api/run", post(run_dataflow))
@@ -234,15 +236,24 @@ async fn main() -> anyhow::Result<()> {
         )
         .route("/api/status/:process_id", get(get_dataflow_status))
         .route("/api/status-stream/:process_id", get(status_stream_handler))
-        .route("/api/logs/:process_id", get(logs_handler))
-        .route("/", get(index))
-        .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
+        .route("/api/logs/:process_id", get(logs_handler));
+
+    let app = if let Some(frontend_dir) = find_frontend_dist_dir() {
+        info!("Serving DoraMate frontend from {}", frontend_dir.display());
+        api_routes.fallback_service(
+            ServeDir::new(&frontend_dir).fallback(ServeFile::new(frontend_dir.join("index.html"))),
         )
-        .with_state(app_state);
+    } else {
+        warn!("Frontend dist directory not found. Serving LocalAgent API index only.");
+        api_routes.route("/", get(index))
+    }
+    .layer(
+        CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any),
+    )
+    .with_state(app_state);
 
     let addr = "127.0.0.1:52100";
     info!("📡 Server listening on http://{}", addr);
@@ -251,6 +262,32 @@ async fn main() -> anyhow::Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+fn find_frontend_dist_dir() -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            candidates.push(exe_dir.join("frontend"));
+            if let Some(package_root) = exe_dir.parent() {
+                candidates.push(package_root.join("frontend"));
+            }
+        }
+    }
+
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd.join("frontend"));
+        candidates.push(cwd.join("doramate-frontend").join("dist"));
+    }
+
+    for candidate in candidates {
+        if candidate.join("index.html").is_file() {
+            return Some(candidate);
+        }
+    }
+
+    None
 }
 
 /// 首页

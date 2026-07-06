@@ -19,7 +19,8 @@ doramate-examples/
 ├── Cargo.toml
 ├── Cargo.lock
 ├── dataflow.yml
-├── xydataflow.yml
+├── test.yml
+├── test.yml.layout.json
 ├── csharp_detection_summary/
 ├── webcam/
 ├── object_detection/
@@ -60,27 +61,27 @@ dora start dataflow.yml
 - 可直接运行：`dora start dataflow.yml`
 - 包含 `build` 字段，可触发各节点构建
 
-### `xydataflow.yml`（给 DoraMate 前端编辑）
+### `test.yml` + `test.yml.layout.json`（给 DoraMate 前端编辑）
 
-- 包含 DoraMate 自定义字段 `__doramate__`（例如布局坐标）
-- Dora CLI 会严格校验 schema，不能直接 `dora start`
-- 直接执行 `dora start xydataflow.yml` 会报错：`unknown field '__doramate__'`
+- `test.yml` 是标准 Dora 描述文件
+- `test.yml.layout.json` 是 DoraMate 画布布局 sidecar
+- 前端打开 `test.yml` 时会尝试自动读取同目录下的 `test.yml.layout.json`
 
-## 在 doramate-frontend 打开 `xydataflow.yml`
+## 在 doramate-frontend 打开 `test.yml`
 
-`xydataflow.yml` 的主要用途是给 `doramate-frontend` 网页做可视化编辑。
+`test.yml` 的主要用途是给 `doramate-frontend` 网页做可视化编辑和运行验证。
 
 基本流程：
 
 1. 启动 `doramate-frontend`（以及它依赖的 localagent 服务）
 2. 在网页中使用“打开/导入 YAML”功能
-3. 选择本目录下的 `xydataflow.yml`
+3. 选择本目录下的 `test.yml`
 4. 在画布中查看和编辑节点布局、连线、配置
 
 注意：
 
 - 如果你要用命令行直接运行，请使用 `dataflow.yml`
-- `xydataflow.yml` 适合前端可视化编辑，不适合直接喂给 `dora start`
+- `test.yml.layout.json` 只给 DoraMate 前端保存布局使用
 
 ## 配置项
 
@@ -137,5 +138,5 @@ object_detection/models/yolov8n.safetensors
 
 ### 4. `unknown field '__doramate__'`
 
-- 原因：用 Dora CLI 直接运行了 `xydataflow.yml`
+- 原因：用 Dora CLI 直接运行了包含 DoraMate 内嵌布局元数据的旧格式 YAML
 - 处理：改为 `dora start dataflow.yml`

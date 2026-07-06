@@ -106,6 +106,7 @@ mod tests {
             label: label.to_string(),
             node_type: "mock".to_string(),
             path: None,
+            build: None,
             env: None,
             config: None,
             outputs: None,

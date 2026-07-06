@@ -29,9 +29,9 @@ Write-Host "=== Step 1: Version Consistency Check ==="
 function Get-CargoVersion {
     param([string]$ProjectDir)
     $cargoToml = Join-Path $ProjectDir "Cargo.toml"
-    $versionLine = Select-String '^version = "([^"]+)"' (Get-Content $cargoToml -Raw) | Select-Object -First 1
-    if ($versionLine) {
-        return $versionLine.Matches[0].Groups[1].Value
+    $content = Get-Content $cargoToml -Raw
+    if ($content -match '(?m)^version\s*=\s*"([^"]+)"') {
+        return $matches[1]
     }
     return $null
 }
@@ -96,7 +96,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "cargo build (release) failed with exit code $LASTEXITCODE"
     }
-    Write-Host "  [OK] target/release/doramate-localagent.exe"
+    Write-Host "  [OK] doramate-localagent/target/release/doramate-localagent.exe"
 } finally {
     Pop-Location
 }
@@ -106,7 +106,15 @@ Write-Host ""
 Write-Host "=== Step 4: Build Frontend (release WASM) ==="
 Push-Location (Join-Path $repoRoot "doramate-frontend")
 try {
-    trunk build --release
+    $previousNoColor = $env:NO_COLOR
+    Remove-Item Env:NO_COLOR -ErrorAction SilentlyContinue
+    try {
+        trunk build --release
+    } finally {
+        if ($null -ne $previousNoColor) {
+            $env:NO_COLOR = $previousNoColor
+        }
+    }
     if ($LASTEXITCODE -ne 0) {
         throw "trunk build (release) failed with exit code $LASTEXITCODE"
     }
@@ -155,7 +163,7 @@ Write-Host "║     DoraMate v$Version Build Complete        ║"
 Write-Host "╚══════════════════════════════════════════════╝"
 Write-Host ""
 Write-Host "Output artifacts:"
-Write-Host "  - bin:      target/release/doramate-localagent.exe"
+Write-Host "  - bin:      doramate-localagent/target/release/doramate-localagent.exe"
 Write-Host "  - frontend: doramate-frontend/dist/"
 Write-Host "  - dora CLI: dora-api-csharp/third_party/dora/target/release/dora.exe"
 if (-not $SkipPackaging) {

@@ -84,6 +84,9 @@ pub struct Node {
     /// 节点路径 (可选，用于自定义 DORA node 路径)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    /// 构建命令 (可选，用于保留导入的 DORA build)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build: Option<String>,
     /// 环境变量 (可选)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub env: Option<HashMap<String, String>>,

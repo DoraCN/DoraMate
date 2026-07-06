@@ -473,6 +473,7 @@ pub fn Canvas(
                             label: node_label,
                             node_type: template.node_type.clone(),
                             path: template.path.clone(),
+                            build: None,
                             env: None,
                             config: None,
                             outputs: template.outputs.clone(),

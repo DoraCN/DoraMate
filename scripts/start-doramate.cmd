@@ -1,6 +1,6 @@
 @echo off
-title DoraMate v0.9.0
-echo === DoraMate v0.9.0 ===
+title DoraMate v0.10.0
+echo === DoraMate v0.10.0 ===
 echo.
 echo Starting LocalAgent...
 start /B "" "%~dp0doramate-localagent.exe"

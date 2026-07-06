@@ -212,7 +212,7 @@ impl From<&Dataflow> for DoraDataflow {
             let dora_node = DoraNode {
                 id: node.id.clone(),
                 path: node_path,
-                build: get_node_build(&node.node_type),
+                build: node.build.clone().or_else(|| get_node_build(&node.node_type)),
                 inputs: if inputs.is_empty() {
                     None
                 } else {
@@ -284,6 +284,7 @@ impl From<&DoraDataflow> for Dataflow {
                     .unwrap_or_else(|| dora_node.id.clone()),
                 node_type: infer_node_type(&dora_node.path),
                 path: dora_node.path.clone(), // 保留路径
+                build: dora_node.build.clone(), // 保留构建命令
                 env: dora_node.env.clone(),   // 保留环境变量
                 config: None,
                 inputs,
@@ -339,6 +340,7 @@ mod tests {
                     label: "Camera".to_string(),
                     node_type: "camera".to_string(),
                     path: None,
+                    build: None,
                     env: Some(env.clone()),
                     config: None,
                     inputs: None,
@@ -352,6 +354,7 @@ mod tests {
                     label: "YOLO".to_string(),
                     node_type: "yolo".to_string(),
                     path: None,
+                    build: None,
                     env: None,
                     config: None,
                     inputs: Some(vec!["image".to_string()]),
@@ -473,6 +476,14 @@ mod tests {
         assert_eq!(dataflow.nodes.len(), 2);
         assert_eq!(dataflow.nodes[0].id, "camera");
         assert_eq!(dataflow.nodes[1].id, "yolo");
+        assert_eq!(
+            dataflow.nodes[0].build.as_deref(),
+            Some("pip install opencv-video-capture")
+        );
+        assert_eq!(
+            dataflow.nodes[1].build.as_deref(),
+            Some("pip install dora-yolo")
+        );
 
         // 验证布局
         assert_eq!(dataflow.nodes[0].x, 100.0);
