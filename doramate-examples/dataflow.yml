@@ -7,7 +7,7 @@ nodes:
   outputs:
   - frame
   env:
-    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
+    PATH: E:\vcpkg\installed\x64-windows\bin;${PATH}
 - id: object_detection
   build: cargo build --release -p object_detection
   path: target/release/object_detection
@@ -16,7 +16,7 @@ nodes:
   outputs:
   - detections
   env:
-    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
+    PATH: E:\vcpkg\installed\x64-windows\bin;${PATH}
 - id: csharp_detection_summary
   build: dotnet build csharp_detection_summary/CSharpDetectionSummary.csproj -c Release -p:NuGetAudit=false
   path: csharp_detection_summary/bin/Release/net8.0/CSharpDetectionSummary.exe
@@ -35,7 +35,7 @@ nodes:
   outputs:
   - detections
   env:
-    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
+    PATH: E:\vcpkg\installed\x64-windows\bin;${PATH}
 - id: recorder
   build: cargo build --release -p recorder
   path: target/release/recorder
@@ -45,4 +45,4 @@ nodes:
   env:
     RECORDER_OUTPUT: recording.avi
     RECORDER_FPS: '30'
-    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
+    PATH: E:\vcpkg\installed\x64-windows\bin;${PATH}

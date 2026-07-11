@@ -2,7 +2,7 @@ fn main() {
     // Link to vcpkg OpenCV libraries
     // Use release libraries for both debug and release builds
     // This is necessary because vcpkg's debug build may be incomplete
-    println!("cargo:rustc-link-search=native=c:\\vcpkg\\installed\\x64-windows\\lib");
+    println!("cargo:rustc-link-search=native=e:\\vcpkg\\installed\\x64-windows\\lib");
     println!("cargo:rustc-link-lib=opencv_core4");
     println!("cargo:rustc-link-lib=opencv_videoio4");
     println!("cargo:rustc-link-lib=opencv_imgcodecs4");
@@ -25,7 +25,7 @@ fn copy_opencv_dlls() {
         .expect("Cannot find target directory")
         .join(&profile);
 
-    let vcpkg_bin = std::path::Path::new("c:\\vcpkg\\installed\\x64-windows\\bin");
+    let vcpkg_bin = std::path::Path::new("e:\\vcpkg\\installed\\x64-windows\\bin");
 
     // List of required OpenCV DLLs
     let dlls = [

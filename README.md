@@ -35,7 +35,7 @@ DoraMate/
 - Rust stable（建议 1.70+）
 - Dora CLI（`dora --version` 可用）
 - Trunk（用于前端开发：`trunk --version`）
-- Windows 下运行 `doramate-examples` 还需要 OpenCV/vcpkg（默认路径为 `C:\vcpkg\installed\x64-windows`）
+- Windows 下运行 `doramate-examples` 还需要 OpenCV/vcpkg（默认路径为 `E:\vcpkg\installed\x64-windows`）
 
 可选安装命令：
 
@@ -173,7 +173,7 @@ dora start dataflow.yml
 
 ### 4. 示例运行时报 OpenCV 或模型相关错误
 
-- 检查 `C:\vcpkg\installed\x64-windows\bin` 是否在 PATH 中
+- 检查 `E:\vcpkg\installed\x64-windows\bin` 是否在 PATH 中
 - 检查 `object_detection/models/yolov8n.safetensors` 是否存在
 
 ## 相关文档

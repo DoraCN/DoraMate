@@ -33,13 +33,13 @@ doramate-examples/
 
 1. Rust stable（edition 2021）
 2. Dora CLI（可执行 `dora --help`）
-3. OpenCV 4（当前工程默认使用 `C:\vcpkg\installed\x64-windows`）
+3. OpenCV 4（当前工程默认使用 `E:\vcpkg\installed\x64-windows`）
 4. 可用摄像头设备
 
 说明：
 
-- 各节点 `build.rs` 会链接 `c:\vcpkg\installed\x64-windows\lib`
-- 运行时需要 `c:\vcpkg\installed\x64-windows\bin` 下的 OpenCV DLL
+- 各节点 `build.rs` 会链接 `e:\vcpkg\installed\x64-windows\lib`
+- 运行时需要 `e:\vcpkg\installed\x64-windows\bin` 下的 OpenCV DLL
 - `dataflow.yml` 已为节点设置 PATH
 
 ## 快速开始（Dora CLI）
@@ -128,7 +128,7 @@ object_detection/models/yolov8n.safetensors
 
 ### 2. OpenCV DLL 缺失
 
-- 检查 `C:\vcpkg\installed\x64-windows\bin` 是否存在对应 DLL
+- 检查 `E:\vcpkg\installed\x64-windows\bin` 是否存在对应 DLL
 - 检查运行环境 `PATH` 是否包含该目录
 
 ### 3. `Model file not found`

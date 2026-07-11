@@ -6,7 +6,7 @@ nodes:
   outputs:
   - frame
   env:
-    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
+    PATH: E:\vcpkg\installed\x64-windows\bin;${PATH}
 - id: object_detection
   path: target/release/object_detection
   inputs:
@@ -14,7 +14,7 @@ nodes:
   outputs:
   - detections
   env:
-    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
+    PATH: E:\vcpkg\installed\x64-windows\bin;${PATH}
 - id: viewer
   path: target/release/viewer
   inputs:
@@ -23,7 +23,7 @@ nodes:
   outputs:
   - detections
   env:
-    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
+    PATH: E:\vcpkg\installed\x64-windows\bin;${PATH}
 - id: recorder
   path: target/release/recorder
   inputs:
@@ -31,5 +31,5 @@ nodes:
     detections: object_detection/detections
   env:
     RECORDER_OUTPUT: recording.avi
-    PATH: C:\vcpkg\installed\x64-windows\bin;${PATH}
+    PATH: E:\vcpkg\installed\x64-windows\bin;${PATH}
     RECORDER_FPS: '30'

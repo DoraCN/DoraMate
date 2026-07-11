@@ -15,11 +15,11 @@ DoraMate `0.10.0` 已完成本地发布收尾验证：
 - ZIP 内 LocalAgent 能直接托管前端页面。
 - 版本号已统一到 `0.10.0`。
 - C# SDK / 模板源码已同步到 `0.10.0`。
+- C# SDK / 模板 `0.10.0` NuGet 包已公开发布。
 
-当前项目已经具备作为 `0.10.0` release artifact 的本地交付条件。公开发布层面仍需执行两个外部动作：
+当前项目已经具备作为 `0.10.0` release artifact 的本地交付条件。公开发布层面仍需执行以下外部动作：
 
 1. 推送 tag / GitHub Release。
-2. 如需公开 C# `0.10.0` NuGet 包，设置 `NUGET_API_KEY` 后运行 NuGet publish。
 
 ---
 
@@ -164,25 +164,11 @@ out/zip-smoke-20260706-101524
 | ---- | ---- |
 | `DoraMate.DoraNode` v0.9.0 | 已公开发布到 nuget.org |
 | `DoraMate.DoraOperator` v0.9.0 | 已公开发布到 nuget.org |
-| `DoraMate.DoraNode` v0.10.0 | 源码已同步，待公开发布 |
-| `DoraMate.DoraOperator` v0.10.0 | 源码已同步，待公开发布 |
-| `DoraMate.Templates` v0.10.0 | 源码已同步，待公开发布 |
+| `DoraMate.DoraNode` v0.10.0 | 已公开发布到 nuget.org |
+| `DoraMate.DoraOperator` v0.10.0 | 已公开发布到 nuget.org |
+| `DoraMate.Templates` v0.10.0 | 已公开发布到 nuget.org |
 
-不要在文档中表述为 “0.10.0 已公开发布”，除非已经实际执行 NuGet publish 并确认 nuget.org 可安装。
-
-推荐发布命令：
-
-```powershell
-cd dora-api-csharp
-pwsh ./scripts/package-nuget.ps1
-pwsh ./scripts/publish-nuget.ps1
-```
-
-前置条件：
-
-- 已设置 `NUGET_API_KEY`。
-- 已确认本地 pack 产物可用。
-- 已确认版本号仍为 `0.10.0`。
+C# `0.10.0` NuGet 发布动作已完成，后续文档可以明确表述为 “0.10.0 已公开发布到 nuget.org”。
 
 ---
 
@@ -193,7 +179,6 @@ pwsh ./scripts/publish-nuget.ps1
 1. 清理或忽略本地构建产物，例如 `doramate-examples/csharp_detection_summary/bin/`、`out/zip-smoke-*`、`doramate-frontend/dist/`。
 2. 决定是否将 release gate 结果 JSON 纳入发布留档。
 3. 创建 `v0.10.0` tag 并触发 GitHub Release。
-4. 如需公开 C# SDK / 模板，执行 NuGet publish。
 
 ---
 
@@ -204,7 +189,7 @@ pwsh ./scripts/publish-nuget.ps1
 - 功能主链路可运行。
 - 发布脚本可构建。
 - ZIP 可解压烟测。
-- C# SDK 版本口径明确。
+- C# SDK / 模板 `0.10.0` NuGet 包已公开发布。
 - 文档入口已对齐当前文件与发布状态。
 
 后续不建议继续追加功能，应进入冻结、提交、打 tag 和发布阶段。
